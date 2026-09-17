@@ -1,0 +1,17 @@
+{
+  "name": "Agropecuária Cacimba — Suplementação",
+  "short_name": "Cacimba Sup.",
+  "description": "Controle de trato, estoque e fabricação de suplementos da Agropecuária Cacimba.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f5f3",
+  "theme_color": "#3f7a43",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "./assets/img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./assets/img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./assets/img/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
