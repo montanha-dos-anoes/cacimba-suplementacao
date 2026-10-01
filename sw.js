@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "cacimba-suplementacao-";
-const CACHE_NAME = `${CACHE_PREFIX}1.15.5`;
+const CACHE_NAME = `${CACHE_PREFIX}1.18.1`;
 const CDN_URLS = [
   "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0",
   "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",

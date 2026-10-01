@@ -87,10 +87,14 @@ test("gravar fecha a folha de gestão em vez de deixá-la aberta", () => {
   assert.ok(stock.match(/sheet\.close\(\)/g).length >= 5, "toda gravação da folha precisa fechar");
 });
 
-test("gravar trato limpa o formulário e volta pro Início", () => {
+test("gravar trato limpa o formulário e fica na tela pro próximo lote", () => {
   const feeding = read("src/feeding.js");
+  const salvo = feeding.slice(feeding.indexOf("function afterFeedingSaved"), feeding.indexOf("function queueFeeding"));
   assert.match(feeding, /function resetFeedingForm/);
-  assert.match(feeding, /resetFeedingForm\(\);[\s\S]*showTab\('inicio'\)/);
+  assert.match(salvo, /resetFeedingForm\(\);/);
+  assert.doesNotMatch(salvo, /showTab/, "o campo trata lote atrás de lote sem sair da tela");
+  assert.doesNotMatch(feeding.slice(feeding.indexOf("function resetFeedingForm"), feeding.indexOf("function feedingOccurredChanged")), /\$\('product'\)\.value=''/,
+    "o suplemento escolhido continua para o próximo lote");
 });
 
 test("relatório de estoque não promete um período que ele ignora", () => {
@@ -260,11 +264,11 @@ test("datas automáticas de trato e fabricação não ficam congeladas desde a a
     "a data exibida no fuso da fazenda deve ser convertida no mesmo fuso antes de gravar");
 });
 
-test("a categoria do lote aponta para um produto do estoque, não texto livre", () => {
+test("a categoria do lote aponta para um suplemento do estoque, não texto livre", () => {
   const lotsFile = read("src/lots.js");
   const sql = read("supabase/13-lotes-versionados.sql");
-  assert.match(lotsFile, /productOptionsHtml\(group\?\.product_id \|\| ""\)/,
-    "o produto da categoria é escolhido no select do estoque");
+  assert.match(lotsFile, /supplementOptionsHtml\(group\?\.product_id \|\| ""\)/,
+    "o suplemento da categoria é escolhido no select do estoque");
   assert.match(lotsFile, /product_id: row\.querySelector\("\.lotProduct"\)\.value/);
   assert.match(sql, /set product_id = p\.id/, "a migração casa o product_name antigo com o produto do estoque");
   assert.match(sql, /raise exception 'Escolha o produto de todas as categorias\.'/);
@@ -294,9 +298,7 @@ test("o botão de remover linha é uma lixeira que serve qualquer lista", () => 
   assert.match(css, /\.formulaRow,\.lotGroupRow\{position:relative\}/);
   assert.match(css, /\.formulaRowGrid,\.lotGroupGrid\{padding-right:/, "sem folga a lixeira cobre o primeiro campo");
   assert.match(read("src/ui.js"), /^  trash: '<svg/m);
-  for (const file of ["src/lots.js", "src/formulas.js"]) {
-    assert.match(read(file), /class="rowRemove"[^>]*>\$\{icon\("trash"\)\}/, `${file} não usa a lixeira`);
-  }
+  assert.match(read("src/formulas.js"), /class="rowRemove"[^>]*>\$\{icon\("trash"\)\}/, "a fórmula não usa a lixeira");
 });
 
 test("as ações do lote ficam num grid de colunas iguais", () => {
@@ -633,4 +635,12 @@ test("tabela que vira cartão no celular tem rótulo em toda célula", () => {
   const semRotulo = cells.filter(cell => !cell.includes("data-label"));
   assert.deepEqual(semRotulo, [], "célula sem data-label fica sem título quando vira cartão");
   assert.match(read("assets/css/app.css"), /table\.stackTable td::before/);
+});
+
+test("a fórmula é preenchida com os valores exatos, sem completar nem sugerir completar", () => {
+  const formulas = read("src/formulas.js");
+  const bootstrap = read("src/bootstrap.js");
+  assert.doesNotMatch(formulas, /fillFormulaRemainder/);
+  assert.doesNotMatch(formulas, /completar/i);
+  assert.doesNotMatch(bootstrap, /fillFormulaRemainder/);
 });

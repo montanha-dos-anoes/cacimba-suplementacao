@@ -12,9 +12,8 @@ async function runWithNegativeConfirm(call) {
 }
 
 function stockSheetSubtitle(item) {
-  const saldo = SupUnits.formatQuantity(item.quantity_kg, item);
   const status = stockStatusHtml(item);
-  return `${esc(saldo.main)}${saldo.secondary ? ` <span class="small">${esc(saldo.secondary)}</span>` : ""} · ${fmtMoney(item.avg_unit_cost)}/kg${status ? `<div class="rowPills">${status}</div>` : ""}`;
+  return `${esc(SupUnits.formatKg(item.quantity_kg))} ·${fmtMoney(item.avg_unit_cost)}/kg${status ? `<div class="rowPills">${status}</div>` : ""}`;
 }
 
 async function refreshStockSheet(sheet, id) {
@@ -22,10 +21,6 @@ async function refreshStockSheet(sheet, id) {
   const item = stockRowById(id);
   if (item) sheet.setSubtitle(stockSheetSubtitle(item));
   return item;
-}
-
-function unitSelectHtml(id, item) {
-  return `<select id="${id}">${SupUnits.unitOptions(item).map(option => `<option value="${esc(option.value)}">${esc(option.label)}</option>`).join("")}</select>`;
 }
 
 function openStockManager(id) {
@@ -39,6 +34,7 @@ function openStockManager(id) {
       { id: "entrada", label: "Entrada", render: (container, sheet) => renderStockEntry(container, sheet, id) },
       { id: "baixa", label: "Baixa", render: (container, sheet) => renderStockExit(container, sheet, id) },
       { id: "editar", label: "Editar", render: (container, sheet) => renderStockEdit(container, sheet, id) },
+      { id: "corrigir", label: "Corrigir", render: (container, sheet) => renderStockAdjust(container, sheet, id) },
       { id: "historico", label: "Histórico", render: (container, sheet) => renderStockHistory(container, stockRowById(id), sheet) }
     ]
   });
@@ -46,22 +42,17 @@ function openStockManager(id) {
 
 function openStockCreate() {
   showSheet({
-    title: "Novo produto",
-    subtitle: "Produtos comprados e fabricados ficam na mesma lista de estoque.",
+    title: "Nova matéria-prima",
+    subtitle: "Matéria-prima entra nas fórmulas. Suplemento nasce ao salvar uma fórmula.",
     tabs: [{ id: "editar", label: "Cadastro", render: (container, sheet) => renderStockEdit(container, sheet, null) }]
   });
 }
 
 function renderStockSummary(container, item) {
   if (!item) return;
-  const saldo = SupUnits.formatQuantity(item.quantity_kg, item);
-  const unidade = item.display_unit
-    ? `1 ${esc(item.display_unit)} = ${esc(SupUnits.formatKg(item.display_unit_kg))}${item.display_unit_primary ? " · saldo mostrado nesta unidade" : " · saldo mostrado em kg"}`
-    : "só kg";
   container.innerHTML = `
-    <div class="item"><b>Saldo</b><div>${esc(saldo.main)}${saldo.secondary ? ` <span class="small">${esc(saldo.secondary)}</span>` : ""}</div></div>
+    <div class="item"><b>Saldo</b><div>${esc(SupUnits.formatKg(item.quantity_kg))}</div></div>
     <div class="item"><b>Custo médio</b><div>${fmtMoney(item.avg_unit_cost)} por kg</div></div>
-    <div class="item"><b>Unidade de exibição</b><div>${unidade}</div></div>
     <div class="item"><b>Última movimentação</b><div>${item.last_movement_at ? farmDateTimeBR(item.last_movement_at) : "nenhuma"}</div></div>
     ${item.manufactured ? `<div class="item"><b>Fabricado</b><div>fórmula ativa: ${esc(item.formula_name)}</div></div>` : ""}`;
 }
@@ -92,7 +83,7 @@ function refreshEntryPlan() {
     box.innerHTML = "";
     return;
   }
-  const quantity = SupUnits.toKg(decimalValue($("sheetEntryQty").value), $("sheetEntryUnit").value, item);
+  const quantity = decimalValue($("sheetEntryQty").value);
   const balances = Object.fromEntries(stockRows.map(row => [row.product_id, Number(row.quantity_kg || 0)]));
   const plan = productionPlan(item.formula_items, item.formula_base_kg, quantity, balances);
   if (!plan.length) {
@@ -123,9 +114,8 @@ function renderStockEntry(container, sheet, id) {
         </div>
         <div class="small" id="sheetEntryOriginHint"></div>
       </div>` : ""}
-      <div><label>Quantidade</label><input id="sheetEntryQty" class="decimal" type="text" inputmode="decimal" placeholder="Ex.: 1000" data-input="refreshEntryPlan"></div>
-      <div><label>Unidade</label><select id="sheetEntryUnit" data-change="refreshEntryPlan">${SupUnits.unitOptions(item).map(option => `<option value="${esc(option.value)}">${esc(option.label)}</option>`).join("")}</select></div>
-      <div><label>Valor por unidade (R$) <span class="optional">opcional</span></label><input id="sheetEntryCost" class="decimal" type="text" inputmode="decimal" placeholder="Ex.: 1,15"></div>
+      <div><label>Quantidade (kg)</label><input id="sheetEntryQty" class="decimal" type="text" inputmode="decimal" placeholder="Ex.: 1000" data-input="refreshEntryPlan"></div>
+      <div><label>Valor por kg (R$) <span class="optional">opcional</span></label><input id="sheetEntryCost" class="decimal" type="text" inputmode="decimal" placeholder="Ex.: 1,15"></div>
       <div><label>Data</label><input id="sheetEntryDate" type="datetime-local" value="${farmNowLocal()}"></div>
       <div class="full"><label>Fornecedor</label><input id="sheetEntrySupplier"></div>
       <div class="full"><label>Observação</label><textarea id="sheetEntryNotes"></textarea></div>
@@ -149,15 +139,13 @@ function renderStockEntry(container, sheet, id) {
     msg("sheetEntryMsg", "");
     const raw = decimalValue($("sheetEntryQty").value);
     if (!Number.isFinite(raw) || raw <= 0) return msg("sheetEntryMsg", "Informe uma quantidade maior que zero.", true);
-    const unit = $("sheetEntryUnit").value;
-    const kgPerUnit = SupUnits.toKg(1, unit, item) || 1;
-    const costPerUnit = decimalValue($("sheetEntryCost").value);
+    const costPerKg = decimalValue($("sheetEntryCost").value);
 
     if (entryOrigin === "made") {
       try {
         await runWithNegativeConfirm(allowNegative => SupApi.rpc("suplementacao_register_production", {
           p_formula_id: item.formula_id,
-          p_quantity_kg: SupUnits.toKg(raw, unit, item),
+          p_quantity_kg: raw,
           p_occurred_at: $("sheetEntryDate").value ? new Date($("sheetEntryDate").value).toISOString() : new Date().toISOString(),
           p_notes: $("sheetEntryNotes").value.trim() || null,
           p_allow_negative: allowNegative
@@ -176,8 +164,8 @@ function renderStockEntry(container, sheet, id) {
     try {
       await SupApi.rpc("suplementacao_add_stock_entry", {
         p_product_id: id,
-        p_quantity: SupUnits.toKg(raw, unit, item),
-        p_unit_cost: costPerUnit / kgPerUnit,
+        p_quantity: raw,
+        p_unit_cost: costPerKg,
         p_occurred_at: $("sheetEntryDate").value ? new Date($("sheetEntryDate").value).toISOString() : new Date().toISOString(),
         p_supplier: $("sheetEntrySupplier").value.trim() || null,
         p_notes: $("sheetEntryNotes").value.trim() || null
@@ -193,15 +181,13 @@ function renderStockEntry(container, sheet, id) {
 }
 
 function renderStockExit(container, sheet, id) {
-  const item = stockRowById(id);
   container.innerHTML = `
     <div class="grid">
-      <div><label>Quantidade</label><input id="sheetExitQty" class="decimal" type="text" inputmode="decimal" placeholder="Ex.: 500"></div>
-      <div><label>Unidade</label>${unitSelectHtml("sheetExitUnit", item)}</div>
-      <div class="full"><label>Tipo</label><select id="sheetExitKind"><option value="sale">Venda</option><option value="loss">Perda</option><option value="fix">Correção</option></select></div>
+      <div class="full"><label>Quantidade (kg)</label><input id="sheetExitQty" class="decimal" type="text" inputmode="decimal" placeholder="Ex.: 500"></div>
+      <div class="full"><label>Tipo</label><select id="sheetExitKind"><option value="sale">Venda</option><option value="loss">Perda</option></select></div>
       <div class="full"><label>Motivo <span class="optional" id="sheetExitReasonHint">obrigatório</span></label><input id="sheetExitReason" placeholder="Ex.: perda por umidade"></div>
       <div class="full"><button class="btn" id="sheetExitBtn">Registrar baixa</button>
-        <div class="small">Para corrigir o saldo <b>para mais</b>, use a aba Entrada.</div>
+        <div class="small">Saldo errado por lançamento ou contagem? Use a aba Corrigir.</div>
         <div id="sheetExitMsg"></div>
       </div>
     </div>`;
@@ -221,10 +207,9 @@ function renderStockExit(container, sheet, id) {
     const isSale = kindSelect.value === "sale";
     if (!isSale && !reason) return msg("sheetExitMsg", "Informe o motivo.", true);
 
-    const quantity = SupUnits.toKg(raw, $("sheetExitUnit").value, item);
     const call = allowNegative => isSale
-      ? SupApi.rpc("suplementacao_sell_stock", { p_product_id: id, p_quantity: quantity, p_reason: reason || null, p_allow_negative: allowNegative })
-      : SupApi.rpc("suplementacao_adjust_stock", { p_product_id: id, p_quantity: -quantity, p_reason: reason, p_allow_negative: allowNegative });
+      ? SupApi.rpc("suplementacao_sell_stock", { p_product_id: id, p_quantity: raw, p_reason: reason || null, p_allow_negative: allowNegative })
+      : SupApi.rpc("suplementacao_adjust_stock", { p_product_id: id, p_quantity: -raw, p_reason: reason, p_allow_negative: allowNegative });
 
     try {
       await runWithNegativeConfirm(call);
@@ -239,23 +224,84 @@ function renderStockExit(container, sheet, id) {
   });
 }
 
+let adjustDirection = 1;
+
+function adjustedBalance(balanceKg, quantityKg, direction) {
+  return Math.round((Number(balanceKg || 0) + direction * Number(quantityKg || 0)) * 1000) / 1000;
+}
+
+function refreshAdjustPreview(item) {
+  const quantity = decimalValue($("sheetAdjustQty").value);
+  $("sheetAdjustPreview").innerHTML = quantity > 0
+    ? `Saldo passa de <b>${esc(SupUnits.formatKg(item.quantity_kg))}</b> para <b>${esc(SupUnits.formatKg(adjustedBalance(item.quantity_kg, quantity, adjustDirection)))}</b>`
+    : `Saldo atual: <b>${esc(SupUnits.formatKg(item.quantity_kg))}</b>`;
+}
+
+function renderStockAdjust(container, sheet, id) {
+  const item = stockRowById(id);
+  adjustDirection = 1;
+  container.innerHTML = `
+    <div class="grid">
+      <div class="full"><label>Corrigir o saldo para</label>
+        <div class="reading" id="sheetAdjustDirection">
+          <button class="on" data-direction="1">+ Aumentar</button>
+          <button data-direction="-1">− Diminuir</button>
+        </div>
+      </div>
+      <div class="full"><label>Quantidade (kg)</label><input id="sheetAdjustQty" class="decimal" type="text" inputmode="decimal" placeholder="Ex.: 25"></div>
+      <div class="full small" id="sheetAdjustPreview"></div>
+      <div class="full"><label>Motivo <span class="optional">obrigatório</span></label><input id="sheetAdjustReason" placeholder="Ex.: entrada lançada com 100 kg a mais"></div>
+      <div class="full"><button class="btn" id="sheetAdjustBtn">Salvar correção</button>
+        <div class="small">Não conta como entrada nem como saída e não muda o custo médio. Fica no histórico como Ajuste, com o motivo.</div>
+        <div id="sheetAdjustMsg"></div>
+      </div>
+    </div>`;
+
+  $("sheetAdjustDirection").querySelectorAll("button").forEach(button => {
+    button.onclick = () => {
+      adjustDirection = Number(button.dataset.direction);
+      $("sheetAdjustDirection").querySelectorAll("button").forEach(other => other.classList.toggle("on", other === button));
+      refreshAdjustPreview(item);
+    };
+  });
+  $("sheetAdjustQty").oninput = () => refreshAdjustPreview(item);
+  refreshAdjustPreview(item);
+
+  $("sheetAdjustBtn").onclick = event => runAction(event.currentTarget, async () => {
+    msg("sheetAdjustMsg", "");
+    const quantity = decimalValue($("sheetAdjustQty").value);
+    if (!(quantity > 0)) return msg("sheetAdjustMsg", "Informe uma quantidade maior que zero.", true);
+    const reason = $("sheetAdjustReason").value.trim();
+    if (!reason) return msg("sheetAdjustMsg", "Informe o motivo da correção.", true);
+
+    try {
+      await runWithNegativeConfirm(allowNegative => SupApi.rpc("suplementacao_adjust_stock", {
+        p_product_id: id,
+        p_quantity: adjustDirection * quantity,
+        p_reason: reason,
+        p_allow_negative: allowNegative
+      }));
+    } catch (error) {
+      if (error === CANCELADO) return;
+      return msg("sheetAdjustMsg", friendlyError(error), true);
+    }
+    forgetAfterWrite("saldo", "inicio");
+    await loadStock();
+    sheet.close();
+    toast("Saldo corrigido.");
+  });
+}
+
 function renderStockEdit(container, sheet, id) {
   const item = id ? stockRowById(id) : null;
   container.innerHTML = `
     <div class="grid">
       <div class="full"><label>Nome</label><input id="sheetEditName" value="${esc(item?.name || "")}" placeholder="Ex.: Milho moído"></div>
-      <div class="full checkLine"><label><input type="checkbox" id="sheetEditHasUnit" ${item?.display_unit ? "checked" : ""}> Tem unidade de compra/uso além do kg</label></div>
-      <div class="grid full ${item?.display_unit ? "" : "hidden"}" id="sheetEditUnitFields">
-        <div><label>Nome da unidade</label><input id="sheetEditUnit" value="${esc(item?.display_unit || "")}" placeholder="Ex.: saca, L, bombona"></div>
-        <div><label>Quanto pesa em kg</label><input id="sheetEditUnitKg" class="decimal" type="text" inputmode="decimal" value="${esc(String(item?.display_unit_kg ?? "").replace(".", ","))}" placeholder="Ex.: 30"></div>
-        <div class="full checkLine"><label><input type="checkbox" id="sheetEditUnitPrimary" ${item?.display_unit_primary ? "checked" : ""}> Mostrar o saldo nesta unidade em vez de kg</label></div>
-      </div>
       ${id ? "" : `<div class="full initialBox">
         <div class="itemsHead">Saldo inicial (opcional)</div>
         <div class="grid">
-          <div><label>Quantidade</label><input id="sheetInitQty" class="decimal" type="text" inputmode="decimal" placeholder="Ex.: 1000"></div>
-          <div><label>Unidade</label><select id="sheetInitUnit"><option value="kg">kg</option></select></div>
-          <div class="full"><label>Valor por unidade (R$) <span class="optional">opcional</span></label><input id="sheetInitCost" class="decimal" type="text" inputmode="decimal" placeholder="Ex.: 1,15"></div>
+          <div><label>Quantidade (kg)</label><input id="sheetInitQty" class="decimal" type="text" inputmode="decimal" placeholder="Ex.: 1000"></div>
+          <div><label>Valor por kg (R$) <span class="optional">opcional</span></label><input id="sheetInitCost" class="decimal" type="text" inputmode="decimal" placeholder="Ex.: 1,15"></div>
         </div>
         <div class="small">Tudo aqui é opcional. Preenchendo a quantidade, o produto já nasce com essa entrada lançada; informando também o valor, o custo médio já sai calculado.</div>
       </div>`}
@@ -265,39 +311,11 @@ function renderStockEdit(container, sheet, id) {
       </div>
     </div>`;
 
-  const refreshInitialUnit = () => {
-    if (!$("sheetInitUnit")) return;
-    const custom = $("sheetEditHasUnit").checked ? $("sheetEditUnit").value.trim() : "";
-    const chosen = $("sheetInitUnit").value;
-    $("sheetInitUnit").innerHTML = `<option value="kg">kg</option>${custom ? `<option value="${esc(custom)}">${esc(custom)}</option>` : ""}`;
-    $("sheetInitUnit").value = custom && chosen === custom ? custom : "kg";
-  };
-
-  $("sheetEditHasUnit").onchange = () => {
-    $("sheetEditUnitFields").classList.toggle("hidden", !$("sheetEditHasUnit").checked);
-    refreshInitialUnit();
-  };
-  $("sheetEditUnit").oninput = refreshInitialUnit;
-
   $("sheetEditBtn").onclick = event => runAction(event.currentTarget, async () => {
     msg("sheetEditMsg", "");
     const name = $("sheetEditName").value.trim();
     if (!name) return msg("sheetEditMsg", "Informe o nome do produto.", true);
-    const hasUnit = $("sheetEditHasUnit").checked;
-    const unitName = $("sheetEditUnit").value.trim();
-    const unitKg = decimalValue($("sheetEditUnitKg").value);
-    if (hasUnit && (!unitName || !(unitKg > 0))) {
-      return msg("sheetEditMsg", "Informe o nome da unidade e quanto ela pesa em kg.", true);
-    }
-    if (hasUnit && ["kg", "quilo", "quilos"].includes(unitName.toLowerCase())) {
-      return msg("sheetEditMsg", "A unidade de exibição precisa ser diferente de kg.", true);
-    }
-    const payload = {
-      name,
-      display_unit: hasUnit ? unitName : null,
-      display_unit_kg: hasUnit ? unitKg : null,
-      display_unit_primary: hasUnit && $("sheetEditUnitPrimary").checked
-    };
+    const payload = { name, display_unit: null, display_unit_kg: null, display_unit_primary: false };
     const { data, error } = id
       ? await sb.from("suplementacao_products").update(payload).eq("id", id).select().single()
       : await sb.from("suplementacao_products").insert({ ...payload, created_by: profile.id }).select().single();
@@ -311,14 +329,11 @@ function renderStockEdit(container, sheet, id) {
       const created = data;
       const initialQty = decimalValue($("sheetInitQty").value);
       if (initialQty > 0) {
-        const product = { display_unit: payload.display_unit, display_unit_kg: payload.display_unit_kg };
-        const unit = $("sheetInitUnit").value;
-        const kgPerUnit = SupUnits.toKg(1, unit, product) || 1;
         try {
           await SupApi.rpc("suplementacao_add_stock_entry", {
             p_product_id: created.id,
-            p_quantity: SupUnits.toKg(initialQty, unit, product),
-            p_unit_cost: decimalValue($("sheetInitCost").value) / kgPerUnit,
+            p_quantity: initialQty,
+            p_unit_cost: decimalValue($("sheetInitCost").value),
             p_occurred_at: new Date().toISOString(),
             p_supplier: null,
             p_notes: "Saldo inicial do cadastro"
@@ -369,6 +384,8 @@ function stockHistoryWithBalance(movements, opening = 0) {
   });
   return withBalance.reverse();
 }
+
+
 
 async function fixEntryCost(movement, item, container, sheet) {
   const current = String(Number(movement.unit_cost || 0)).replace(".", ",");

@@ -26,8 +26,8 @@ test("sem lote, diz que falta o lote — e só isso", () => {
   assert.deepEqual(erros({ lot: "" }), ["Escolha o lote."]);
 });
 
-test("sem produto, diz que falta o produto", () => {
-  assert.deepEqual(erros({ product: "" }), ["Escolha o produto."]);
+test("lote sem suplemento cadastrado não deixa tratar", () => {
+  assert.deepEqual(erros({ product: "" }), ["Este lote não tem suplemento cadastrado nesta data. Ajuste o lote em Lotes."]);
 });
 
 test("sem leitura do cocho, diz que falta a leitura", () => {
@@ -38,9 +38,9 @@ test("sem quantidade, diz que falta a quantidade", () => {
   assert.deepEqual(erros({ qty: "" }), ["Informe a quantidade em kg."]);
 });
 
-test("faltando três coisas, lista as três", () => {
+test("sem lote, não cobra o suplemento: ele vem do lote", () => {
   assert.deepEqual(erros({ lot: "", product: "", reading: null }), [
-    "Escolha o lote.", "Escolha o produto.", "Escolha a leitura do cocho."
+    "Escolha o lote.", "Escolha a leitura do cocho."
   ]);
 });
 
@@ -84,4 +84,15 @@ test("o trato de 0 kg não é barrado pelo app antes de chegar ao banco", () => 
   const salvar = feeding.slice(feeding.indexOf("async function saveFeeding"), feeding.indexOf("async function loadProductStock"));
   assert.doesNotMatch(salvar, /quantity_kg\s*<=\s*0|!decimalValue/,
     "zero é um lançamento válido: o cocho estava cheio");
+});
+
+test("a correção de trato aceita 0 kg como o trato novo", () => {
+  assert.equal(run(`feedingQtyError("0")`), "");
+  assert.equal(run(`feedingQtyError("0,000")`), "");
+  assert.equal(run(`feedingQtyError("")`), "Informe a quantidade em kg.");
+  assert.equal(run(`feedingQtyError("-1")`), "A quantidade não pode ser negativa.");
+  const feeding = read("src/feeding.js");
+  const corrigir = feeding.slice(feeding.indexOf("function renderFeedingEdit"), feeding.indexOf("async function deleteFeeding"));
+  assert.match(corrigir, /feedingQtyError\(\$\('sheetFeedQty'\)\.value\)/);
+  assert.doesNotMatch(corrigir, /quantity>0/, "a correção não pode recusar trato de 0 kg");
 });

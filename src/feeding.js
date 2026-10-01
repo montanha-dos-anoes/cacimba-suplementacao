@@ -28,6 +28,7 @@ function occurredError(value, now = new Date()) {
 }
 
 function resetFeedingForm(){
+  $('lot').value='';
   $('qty').value='';
   $('notes').value='';
   reading=null;
@@ -38,26 +39,38 @@ function resetFeedingForm(){
 
 function feedingOccurredChanged() {
   markDateTimeAsManual($("occurred"));
-  renderLotProductHint();
+  renderFeedingLots();
+  syncLotProduct();
+}
+
+function afterFeedingSaved(message){
+  resetFeedingForm();
+  renderFeedingLots();
+  applyLotProduct();
+  toast(message);
+  $('lot').focus();
 }
 
 function queueFeeding(record){
   outboxAdd(record);
-  resetFeedingForm();
-  applyLotProduct();
   loadHistory();
-  toast('Sem internet. Trato guardado no aparelho — ele sobe sozinho quando a conexão voltar.');
-  showTab('inicio');
+  afterFeedingSaved('Sem internet. Trato guardado no aparelho — ele sobe sozinho quando a conexão voltar.');
+}
+
+function feedingQtyError(texto){
+  const quantidade=String(texto ?? '').trim();
+  if(!quantidade)return 'Informe a quantidade em kg.';
+  if(Number(quantidade.replace(/\./g,'').replace(',','.'))<0)return 'A quantidade não pode ser negativa.';
+  return '';
 }
 
 function feedingErrors(campos, now = new Date()){
   const faltas=[];
   if(!campos.lot)faltas.push('Escolha o lote.');
-  if(!campos.product)faltas.push('Escolha o produto.');
+  else if(!campos.product)faltas.push('Este lote não tem suplemento cadastrado nesta data. Ajuste o lote em Lotes.');
 
-  const quantidade=String(campos.qty ?? '').trim();
-  if(!quantidade)faltas.push('Informe a quantidade em kg.');
-  else if(Number(quantidade.replace(/\./g,'').replace(',','.'))<0)faltas.push('A quantidade não pode ser negativa.');
+  const quantidadeInvalida=feedingQtyError(campos.qty);
+  if(quantidadeInvalida)faltas.push(quantidadeInvalida);
 
   if(!campos.reading)faltas.push('Escolha a leitura do cocho.');
 
@@ -70,9 +83,11 @@ function feedingErrors(campos, now = new Date()){
 async function saveFeeding(){
   msg('feedMsg','');
   refreshAutomaticDateTime($('occurred'));
+  const lotId=$('lot').value;
+  const productId=lotId?lotSupplementId(lotId,feedingDateISO()):'';
   const faltas=feedingErrors({
-    lot:$('lot').value,
-    product:$('product').value,
+    lot:lotId,
+    product:productId,
     qty:$('qty').value,
     reading,
     occurred:$('occurred').value
@@ -82,7 +97,7 @@ async function saveFeeding(){
   const record={
     id:newLocalId(),
     occurred_at:farmLocalToDate($('occurred').value).toISOString(),
-    lot_id:$('lot').value,product_id:$('product').value,
+    lot_id:lotId,product_id:productId,
     quantity_kg:decimalValue($('qty').value),trough_reading:reading,
     recorded_by:profile.id,notes:$('notes').value.trim()||null
   };
@@ -96,12 +111,9 @@ async function saveFeeding(){
   }
   noteConnection(true);
   forgetAfterWrite("saldo", "inicio");
-  resetFeedingForm();
-  applyLotProduct();
   await loadHistory();
   await loadProductStock({ force: true });
-  toast('Trato registrado com sucesso.');
-  showTab('inicio');
+  afterFeedingSaved('Trato registrado. Escolha o próximo lote.');
 }
 
 const SALDO_MAX_AGE_MS = 60000;
@@ -117,7 +129,7 @@ async function loadProductStock(opcoes = {}) {
 function renderProductBalance() {
   const entry = productStock.find(item => item.product_id === $("product").value);
   $("productBalance").textContent = entry
-    ? `Saldo em estoque: ${Number(entry.quantity_kg).toLocaleString("pt-BR")} kg`
+    ? `Saldo em estoque: ${SupUnits.formatKg(entry.quantity_kg)}`
     : "";
 }
 
@@ -125,30 +137,24 @@ function feedingDateISO() {
   return ($("occurred").value || farmNowLocal()).slice(0, 10);
 }
 
-function lotHintGroupHtml(group, productId) {
-  const animais = Number(group.quantity || 0);
-  const esperadoCabDia = Number(group.expected_consumption_kg_head_day || 0);
-  const escolhido = productId && group.product_id === productId;
-  return `<div class="small lotMeta${escolhido ? " on" : ""}">· <b>${esc(group.category || "Categoria")}</b>
-    · ${animais.toLocaleString("pt-BR")} animais
-    · peso médio ${esc(SupUnits.formatKg(group.avg_weight_kg))}
-    · ${esc(lotProductName(group))}
-    · ${esc(SupUnits.formatKg(esperadoCabDia))}/cab/dia
-    · sugerido ${esc(SupUnits.formatKg(animais * esperadoCabDia))}/dia</div>`;
+function lotSupplementId(lotId, dateStr) {
+  return lotMainGroup(currentLotInfo(lotId, dateStr))?.product_id || "";
 }
 
-function lotHintSuggestionHtml(info, productId) {
-  if (!productId) return '<div class="small">Escolha o produto para ver a quantidade sugerida do dia.</div>';
-  const doProduto = info.groups.filter(group => group.product_id === productId);
-  const produto = products.find(item => item.id === productId)?.name || "este produto";
-  if (!doProduto.length) {
-    return `<div class="small">Nenhuma categoria deste lote recebe ${esc(produto)}. Confira o produto ou a composição do lote.</div>`;
-  }
-  const categorias = [...new Set(doProduto.map(group => group.category || "Categoria"))].join(", ");
-  return `<div class="lotHintSuggest">
-    <span class="small">Sugerido para ${esc(produto)} (${esc(categorias)}): <b>${esc(SupUnits.formatKg(lotExpectedKgDay(info, productId)))}</b> no dia</span>
-    <button type="button" class="btn alt smallbtn" data-do="useSuggestedQty">Usar sugestão</button>
-  </div>`;
+function feedingLotOptions(productId, dateStr) {
+  return lots
+    .filter(lot => lot.active && (!productId || lotSupplementId(lot.id, dateStr) === productId))
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base", numeric: true }));
+}
+
+function renderFeedingLots() {
+  const productId = $("product").value;
+  const chosen = $("lot").value;
+  const options = feedingLotOptions(productId, feedingDateISO());
+  $("lot").innerHTML = options.length
+    ? '<option value="">Escolha o lote…</option>' + options.map(lot => `<option value="${lot.id}">${esc(lot.name)}</option>`).join("")
+    : `<option value="">${productId ? "Nenhum lote ativo recebe este suplemento" : "Nenhum lote cadastrado"}</option>`;
+  $("lot").value = options.some(lot => lot.id === chosen) ? chosen : "";
 }
 
 function renderLotProductHint() {
@@ -158,44 +164,51 @@ function renderLotProductHint() {
   if (!lotId) return void (box.innerHTML = "");
 
   const info = currentLotInfo(lotId, feedingDateISO());
-  if (!info || !info.groups.length) {
-    box.innerHTML = '<div class="emptyBox small">Este lote não tem composição cadastrada para esta data. Cadastre as categorias em Lotes para ver a quantidade sugerida.</div>';
+  const group = lotMainGroup(info);
+  if (!group?.product_id) {
+    box.innerHTML = '<div class="emptyBox small">Este lote não tem suplemento cadastrado nesta data. Ajuste o lote em Lotes.</div>';
     return;
   }
 
-  const productId = $("product").value;
-  const lotName = lots.find(item => item.id === lotId)?.name || "Lote";
+  const animais = Number(group.quantity || 0);
+  const porCabeca = Number(group.expected_consumption_kg_head_day || 0);
   box.innerHTML = `<div class="lotHint">
-    <div class="lotHintHead">${esc(lotName)} · ${info.total.toLocaleString("pt-BR")} animais · ${info.groups.length} categoria(s) · composição válida desde ${esc(farmDateBR(info.version.effective_from))}</div>
-    ${info.groups.map(group => lotHintGroupHtml(group, productId)).join("")}
-    <div class="small lotMeta">Total esperado do lote: <b>${esc(SupUnits.formatKg(lotExpectedKgDay(info)))}</b>/dia</div>
-    ${lotHintSuggestionHtml(info, productId)}
+    <div class="lotHintHead">${esc(lotProductName(group))}</div>
+    <div class="small">${animais.toLocaleString("pt-BR")} animais · ${esc(SupUnits.formatKg(porCabeca))}/cab/dia · sugerido <b>${esc(SupUnits.formatKg(lotExpectedKgDay(info)))}</b></div>
   </div>`;
 }
 
-function applySuggestedQty() {
-  const info = currentLotInfo($("lot").value, feedingDateISO());
-  const sugerido = lotExpectedKgDay(info, $("product").value);
-  if (!(sugerido > 0)) return;
-  $("qty").value = sugerido.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
-  $("qty").focus();
+function fillSuggestedQty() {
+  const lotId = $("lot").value;
+  const sugerido = lotId ? lotExpectedKgDay(currentLotInfo(lotId, feedingDateISO())) : 0;
+  $("qty").value = sugerido > 0 ? sugerido.toLocaleString("pt-BR", { maximumFractionDigits: 3 }) : "";
 }
 
-function applyLotProduct() {
-  const info = currentLotInfo($("lot").value, feedingDateISO());
-  const main = lotMainGroup(info);
-  if (main?.product_id && [...$("product").options].some(option => option.value === main.product_id)) {
-    $("product").value = main.product_id;
+function syncLotProduct() {
+  const productId = lotSupplementId($("lot").value, feedingDateISO());
+  if (productId && [...$("product").options].some(option => option.value === productId)) {
+    $("product").value = productId;
   }
   renderProductBalance();
   renderLotProductHint();
+}
+
+function applyLotProduct() {
+  syncLotProduct();
+  fillSuggestedQty();
+}
+
+function feedingProductChanged() {
+  renderFeedingLots();
+  applyLotProduct();
 }
 
 async function loadFeedingScreen(opcoes = {}) {
   refreshAutomaticDateTime($("occurred"));
   applyOccurredLimits();
   await Promise.all([loadMasters(opcoes), loadProductStock(opcoes), loadLotVersions(opcoes)]);
-  applyLotProduct();
+  renderFeedingLots();
+  syncLotProduct();
 }
 
 const TROUGH_LABELS={empty:'Vazio',medium:'Médio',full:'Cheio'};
@@ -331,9 +344,10 @@ function feedingById(id){
   return feedingRecords.find(record=>record.id===id);
 }
 
-function openFeedingEdit(id){
+async function openFeedingEdit(id){
   const record=feedingById(id);
   if(!record)return;
+  await loadLotVersions();
   showSheet({
     title:'Corrigir trato',
     subtitle:`Lançado em ${farmDateTimeBR(record.occurred_at)} por ${esc(record.profiles?.full_name||'')}`,
@@ -345,11 +359,13 @@ function renderFeedingEdit(container,sheet,id){
   const record=feedingById(id);
   if(!record)return;
   const activeLots=lots.filter(lot=>lot.active||lot.id===record.lot_id);
-  const activeProducts=products.filter(item=>item.active||item.id===record.product_id);
+  const dia=farmDateISO(record.occurred_at);
+  const produtoDoLote=lotId=>lotSupplementId(lotId,dia)||(lotId===record.lot_id?record.product_id:'');
+  const nomeDoProduto=productId=>products.find(item=>item.id===productId)?.name||'Sem suplemento cadastrado';
   container.innerHTML=`
     <div class="grid">
       <div class="full"><label>Lote</label><select id="sheetFeedLot">${activeLots.map(lot=>`<option value="${esc(lot.id)}" ${lot.id===record.lot_id?'selected':''}>${esc(lot.name)}</option>`).join('')}</select></div>
-      <div class="full"><label>Produto</label><select id="sheetFeedProduct">${activeProducts.map(item=>`<option value="${esc(item.id)}" ${item.id===record.product_id?'selected':''}>${esc(item.name)}</option>`).join('')}</select></div>
+      <div class="full"><label>Suplemento</label><div id="sheetFeedProduct" class="small"></div></div>
       <div><label>Quantidade (kg)</label><input id="sheetFeedQty" class="decimal" type="text" inputmode="decimal" value="${esc(String(record.quantity_kg).replace('.',','))}"></div>
       <div class="full"><label>Leitura do cocho</label>
         <div class="reading" id="sheetFeedReading">
@@ -363,6 +379,10 @@ function renderFeedingEdit(container,sheet,id){
       </div>
     </div>`;
 
+  const mostrarProduto=()=>{$('sheetFeedProduct').textContent=nomeDoProduto(produtoDoLote($('sheetFeedLot').value))};
+  $('sheetFeedLot').onchange=mostrarProduto;
+  mostrarProduto();
+
   let reading=record.trough_reading;
   $('sheetFeedReading').querySelectorAll('button').forEach(button=>{
     button.onclick=()=>{
@@ -373,14 +393,17 @@ function renderFeedingEdit(container,sheet,id){
 
   $('sheetFeedBtn').onclick=event=>runAction(event.currentTarget,async()=>{
     msg('sheetFeedMsg','');
+    const quantidadeInvalida=feedingQtyError($('sheetFeedQty').value);
+    if(quantidadeInvalida)return msg('sheetFeedMsg',quantidadeInvalida,true);
     const quantity=decimalValue($('sheetFeedQty').value);
-    if(!(quantity>0))return msg('sheetFeedMsg','Informe uma quantidade maior que zero.',true);
     if(!reading)return msg('sheetFeedMsg','Marque a leitura do cocho.',true);
+    const productId=produtoDoLote($('sheetFeedLot').value);
+    if(!productId)return msg('sheetFeedMsg','Este lote não tem suplemento cadastrado nesta data.',true);
     try{
       await SupApi.rpc('correct_feeding_record',{
         p_record_id:id,
         p_lot_id:$('sheetFeedLot').value,
-        p_product_id:$('sheetFeedProduct').value,
+        p_product_id:productId,
         p_quantity_kg:quantity,
         p_trough_reading:reading,
         p_notes:$('sheetFeedNotes').value.trim()||null

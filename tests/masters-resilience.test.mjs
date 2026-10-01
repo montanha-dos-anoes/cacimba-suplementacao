@@ -9,7 +9,11 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const read = path => readFileSync(resolve(root, path), "utf8");
 
 const LOTES = [{ id: "L1", name: "Pasto 1", active: true }];
-const PRODUTOS = [{ id: "P1", name: "Proteinado", active: true }];
+const PRODUTOS = [
+  { id: "P1", name: "Proteinado", active: true },
+  { id: "P2", name: "Milho moído", active: true }
+];
+const FORMULAS = [{ product_id: "P1" }];
 
 function telaDeTrato({ falham = [], offline = false, guardado: semente = null } = {}) {
   const store = new Map(Object.entries(semente || {}));
@@ -39,7 +43,8 @@ function telaDeTrato({ falham = [], offline = false, guardado: semente = null } 
           ? Promise.resolve({ data: null, error: { message: 'relation does not exist', code: "42P01" } })
           : Promise.resolve({
               data: table === "suplementacao_lots" ? LOTES
-                : table === "suplementacao_products" ? PRODUTOS : [],
+                : table === "suplementacao_products" ? PRODUTOS
+                : table === "suplementacao_formulas" ? FORMULAS : [],
               error: null
             });
         const chain = {
@@ -56,18 +61,19 @@ function telaDeTrato({ falham = [], offline = false, guardado: semente = null } 
   return { context, elementos, avisos, chamadas, store };
 }
 
-test("com tudo no ar, lote e produto aparecem", async () => {
+test("com tudo no ar, lote e suplemento aparecem e matéria-prima fica de fora", async () => {
   const { context, elementos } = telaDeTrato();
   await vm.runInContext("loadMasters()", context);
   assert.match(elementos.lot.innerHTML, /Pasto 1/);
   assert.match(elementos.product.innerHTML, /Proteinado/);
+  assert.doesNotMatch(elementos.product.innerHTML, /Milho moído/, "trato só usa suplemento");
 });
 
-test("erro em fórmulas não pode esvaziar lote e produto", async () => {
+test("erro em fórmulas não pode esvaziar lote nem liberar matéria-prima no trato", async () => {
   const { context, elementos } = telaDeTrato({ falham: ["suplementacao_formulas"] });
   await vm.runInContext("loadMasters()", context);
   assert.match(elementos.lot.innerHTML, /Pasto 1/, "o lote veio do servidor e sumiu da tela");
-  assert.match(elementos.product.innerHTML, /Proteinado/, "o produto veio do servidor e sumiu da tela");
+  assert.doesNotMatch(elementos.product.innerHTML, /Milho moído/);
 });
 
 test("erro em produtos não pode esvaziar a lista de lotes", async () => {
@@ -105,7 +111,7 @@ const guardadoCom = (nome, valor) => ({ [CHAVE(nome)]: JSON.stringify({ value: v
 test("offline, a tela de trato não dispara nenhuma busca", async () => {
   const { context, chamadas } = telaDeTrato({
     offline: true,
-    guardado: { ...guardadoCom("cadastro-lotes", LOTES), ...guardadoCom("cadastro-produtos", PRODUTOS) }
+    guardado: { ...guardadoCom("cadastro-lotes", LOTES), ...guardadoCom("cadastro-produtos", PRODUTOS), ...guardadoCom("formulas-ativas", ["P1"]) }
   });
   await vm.runInContext("loadMasters()", context);
   assert.deepEqual(chamadas, [], `cada uma dessas vira um erro de fetch na tela: ${chamadas.join(", ")}`);
@@ -114,7 +120,7 @@ test("offline, a tela de trato não dispara nenhuma busca", async () => {
 test("offline, lote e produto vêm do que está guardado", async () => {
   const { context, elementos } = telaDeTrato({
     offline: true,
-    guardado: { ...guardadoCom("cadastro-lotes", LOTES), ...guardadoCom("cadastro-produtos", PRODUTOS) }
+    guardado: { ...guardadoCom("cadastro-lotes", LOTES), ...guardadoCom("cadastro-produtos", PRODUTOS), ...guardadoCom("formulas-ativas", ["P1"]) }
   });
   await vm.runInContext("loadMasters()", context);
   assert.match(elementos.lot.innerHTML, /Pasto 1/);

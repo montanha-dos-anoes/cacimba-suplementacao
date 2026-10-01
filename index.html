@@ -86,11 +86,11 @@
     <section id="trato" class="hidden">
       <div class="card"><h2>Novo trato</h2>
         <div class="grid">
-          <div><label>Data e hora</label><input id="occurred" type="datetime-local" data-change="feedingOccurred"></div>
-          <div><label>Lote</label><select id="lot" data-change="lotProduct"></select></div>
-          <div><label>Produto</label><select id="product" data-change="feedingProduct"></select></div>
-          <div class="full"><div id="productBalance" class="small"></div><div id="lotProductHint"></div></div>
-          <div><label>Quantidade (kg)</label><input id="qty" class="decimal" type="text" inputmode="decimal" placeholder="Ex.: 50"></div>
+          <div class="full"><label>Suplemento</label><select id="product" data-change="feedingProduct"></select><div id="productBalance" class="small"></div></div>
+          <div class="full"><label>Lote</label><select id="lot" data-change="lotProduct"></select><div id="lotProductHint"></div></div>
+          <div class="full"><label>Quantidade (kg)</label><input id="qty" class="decimal" type="text" inputmode="decimal" placeholder="Ex.: 50">
+            <div class="small">Já vem com o sugerido do lote. Ajuste conforme o cocho.</div>
+          </div>
           <div class="full"><label>Leitura do cocho</label>
             <div class="reading">
               <button data-do="setReading" data-arg="empty">Vazio</button>
@@ -98,6 +98,7 @@
               <button data-do="setReading" data-arg="full">Cheio</button>
             </div>
           </div>
+          <div><label>Data e hora</label><input id="occurred" type="datetime-local" data-change="feedingOccurred"></div>
           <div class="full"><label>Observação (opcional)</label><textarea id="notes"></textarea></div>
           <div class="full"><button class="btn" style="width:100%" data-do="saveFeeding">Registrar trato e leitura</button><div id="feedMsg"></div></div>
         </div>
@@ -113,9 +114,13 @@
 
       <div id="sub-estoque">
         <div class="card"><h2>Estoque</h2>
+          <div class="tabs" id="stockKindTabs">
+            <button class="tab on" data-do="stockKind" data-arg="raw">Matéria-prima</button>
+            <button class="tab" data-do="stockKind" data-arg="supplement">Suplemento</button>
+          </div>
           <div class="stockToolbar">
-            <div class="searchBox"><span class="searchIcon"></span><input id="stockSearch" placeholder="Buscar produto" data-input="renderStock"></div>
-            <button class="btn" data-do="stockCreate">Novo produto</button>
+            <div class="searchBox"><span class="searchIcon"></span><input id="stockSearch" placeholder="Buscar" data-input="renderStock"></div>
+            <button class="btn" id="stockCreateBtn" data-do="stockCreate">Nova matéria-prima</button>
           </div>
           <div class="tableWrap">
             <table class="stockTable">
@@ -241,29 +246,29 @@
 <div id="modalRoot"></div>
 <div id="toastRoot"></div>
 
-<script src="./src/config.js?v=1.15.5"></script>
-<script src="./src/api.js?v=1.15.5"></script>
-<script src="./src/state.js?v=1.15.5"></script>
-<script src="./src/farm-time.js?v=1.15.5"></script>
-<script src="./src/offline.js?v=1.15.5"></script>
-<script src="./src/units.js?v=1.15.5"></script>
-<script src="./src/balance-guard.js?v=1.15.5"></script>
-<script src="./src/ui.js?v=1.15.5"></script>
-<script src="./src/outbox.js?v=1.15.5"></script>
-<script src="./src/nav.js?v=1.15.5"></script>
-<script src="./src/modal.js?v=1.15.5"></script>
-<script src="./src/datefield.js?v=1.15.5"></script>
-<script src="./src/auth.js?v=1.15.5"></script>
-<script src="./src/feeding.js?v=1.15.5"></script>
-<script src="./src/masters.js?v=1.15.5"></script>
-<script src="./src/lots.js?v=1.15.5"></script>
-<script src="./src/stock.js?v=1.15.5"></script>
-<script src="./src/stock-manage.js?v=1.15.5"></script>
-<script src="./src/formulas.js?v=1.15.5"></script>
-<script src="./src/production.js?v=1.15.5"></script>
-<script src="./src/feeding-report.js?v=1.15.5"></script>
-<script src="./src/reports.js?v=1.15.5"></script>
-<script src="./src/home.js?v=1.15.5"></script>
-<script src="./src/bootstrap.js?v=1.15.5"></script>
+<script src="./src/config.js?v=1.18.1"></script>
+<script src="./src/api.js?v=1.18.1"></script>
+<script src="./src/state.js?v=1.18.1"></script>
+<script src="./src/farm-time.js?v=1.18.1"></script>
+<script src="./src/offline.js?v=1.18.1"></script>
+<script src="./src/units.js?v=1.18.1"></script>
+<script src="./src/balance-guard.js?v=1.18.1"></script>
+<script src="./src/ui.js?v=1.18.1"></script>
+<script src="./src/outbox.js?v=1.18.1"></script>
+<script src="./src/nav.js?v=1.18.1"></script>
+<script src="./src/modal.js?v=1.18.1"></script>
+<script src="./src/datefield.js?v=1.18.1"></script>
+<script src="./src/auth.js?v=1.18.1"></script>
+<script src="./src/feeding.js?v=1.18.1"></script>
+<script src="./src/masters.js?v=1.18.1"></script>
+<script src="./src/lots.js?v=1.18.1"></script>
+<script src="./src/stock.js?v=1.18.1"></script>
+<script src="./src/stock-manage.js?v=1.18.1"></script>
+<script src="./src/formulas.js?v=1.18.1"></script>
+<script src="./src/production.js?v=1.18.1"></script>
+<script src="./src/feeding-report.js?v=1.18.1"></script>
+<script src="./src/reports.js?v=1.18.1"></script>
+<script src="./src/home.js?v=1.18.1"></script>
+<script src="./src/bootstrap.js?v=1.18.1"></script>
 </body>
 </html>

@@ -172,15 +172,22 @@ function setFormulaMode(mode) {
   updateFormulaTotal();
 }
 
-function productOptionsHtml(selectedId, placeholder = "Escolha o produto…") {
-  const options = stockRows
+function productOptionsHtml(rows, selectedId, placeholder, emptyText) {
+  const options = rows
     .filter(item => item.active)
-    .slice()
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }));
-  if (!options.length) return '<option value="">Nenhum produto cadastrado no estoque</option>';
+  if (!options.length) return `<option value="">${esc(emptyText)}</option>`;
   return `<option value="" ${selectedId ? "" : "selected"}>${esc(placeholder)}</option>` + options
-    .map(item => `<option value="${item.product_id}" ${item.product_id === selectedId ? "selected" : ""}>${esc(item.name)}${item.manufactured ? " (Fabricado)" : ""}</option>`)
+    .map(item => `<option value="${item.product_id}" ${item.product_id === selectedId ? "selected" : ""}>${esc(item.name)}</option>`)
     .join("");
+}
+
+function rawMaterialOptionsHtml(selectedId) {
+  return productOptionsHtml(rawMaterialRows(), selectedId, "Escolha a matéria-prima…", "Nenhuma matéria-prima cadastrada no estoque");
+}
+
+function supplementOptionsHtml(selectedId) {
+  return productOptionsHtml(supplementRows(), selectedId, "Escolha o suplemento…", "Nenhum suplemento cadastrado — crie uma fórmula");
 }
 
 function addFormulaRow(itemId = "", amount = "") {
@@ -190,7 +197,7 @@ function addFormulaRow(itemId = "", amount = "") {
   row.innerHTML = `
     <button class="rowRemove" data-do="removeFormulaRow" aria-label="Remover item" title="Remover item">${icon("trash")}</button>
     <div class="grid formulaRowGrid">
-      <div class="full"><label>Produto</label><select class="formulaItem" data-change="updateFormulaTotal">${productOptionsHtml(itemId)}</select></div>
+      <div class="full"><label>Matéria-prima</label><select class="formulaItem" data-change="updateFormulaTotal">${rawMaterialOptionsHtml(itemId)}</select></div>
       <div><label class="amountLabel">${esc(formulaAmountLabel())}</label><input class="formulaAmount decimal" type="text" inputmode="decimal" value="${esc(amount)}" placeholder="${formulaMode === "kg" ? "Ex.: 450" : "Ex.: 45"}" data-input="updateFormulaTotal"></div>
     </div>
     <div class="rowFoot">
@@ -203,18 +210,6 @@ function addFormulaRow(itemId = "", amount = "") {
 
 function removeFormulaRow(button) {
   button.closest(".formulaRow").remove();
-  updateFormulaTotal();
-}
-
-function fillFormulaRemainder() {
-  const missingPercent = SupFormula.composition(currentFormulaItems(), 100).missing;
-  if (!(missingPercent > 0)) return;
-  const missing = formulaMode === "kg" ? missingPercent * formulaBatchKg() / 100 : missingPercent;
-  const rows = [...document.querySelectorAll("#sheetFormulaItems .formulaRow")];
-  if (!rows.length) return addFormulaRow("", String(Math.round(missing * 10000) / 10000).replace(".", ","));
-  const input = rows[rows.length - 1].querySelector(".formulaAmount");
-  const total = Math.round((decimalValue(input.value) + missing) * 10000) / 10000;
-  input.value = String(total).replace(".", ",");
   updateFormulaTotal();
 }
 
@@ -241,7 +236,7 @@ function renderFormulaRuler(composition) {
   const chip = composition.excess > 0
     ? `<span class="pill danger">passou ${esc(asText(composition.excess))}</span>`
     : composition.missing > 0
-      ? `<button class="pill warn pillBtn" data-do="fillFormulaRemainder">faltam ${esc(asText(composition.missing))} · completar</button>`
+      ? `<span class="pill warn">faltam ${esc(asText(composition.missing))}</span>`
       : composition.total > 0
         ? '<span class="pill ok">fechado</span>'
         : "";
@@ -265,14 +260,10 @@ function renderFormulaRows(items) {
   rows.forEach((row, index) => {
     const percent = percents[index] || 0;
     const kg = percent * batch / 100;
-    const product = stockRows.find(entry => entry.product_id === items[index]?.item_id);
-    const volume = product && product.display_unit && kg > 0
-      ? ` ≈ ${SupUnits.formatQuantity(kg, product).main}`
-      : "";
     row.querySelector(".formulaHint").textContent = percent > 0
       ? formulaMode === "kg"
-        ? `= ${formatPercent(percent)} da batida${volume}`
-        : `${SupUnits.formatKg(kg)} em ${SupUnits.formatKg(batch)}${volume}`
+        ? `= ${formatPercent(percent)} da batida`
+        : `${SupUnits.formatKg(kg)} em ${SupUnits.formatKg(batch)}`
       : "";
     const fill = row.querySelector(".rowBar span");
     fill.style.width = percent > 0 ? `${Math.min(percent / scale, 1) * 100}%` : "0";
@@ -370,7 +361,7 @@ function formulaEditorHtml() {
   return `
     <div class="grid">
       <div class="full"><label>Nome da fórmula</label><input id="sheetFormulaName" placeholder="Ex.: Proteinado 0,3" data-input="updateFormulaTotal">
-        <div class="small">O produto fabricado entra no estoque com este mesmo nome.</div>
+        <div class="small">O suplemento entra no estoque com este mesmo nome. Só matéria-prima entra na receita.</div>
       </div>
       <div><label>Digitar a receita em</label>
         <div class="reading modeSwitch" id="sheetFormulaMode">
@@ -495,5 +486,5 @@ async function saveFormula() {
   const sheet = formulaSheet;
   if (sheet) sheet.close();
   await loadFormulas();
-  toast("Fórmula salva. O produto fabricado está no estoque — use Fabricar para produzir.");
+  toast("Fórmula salva. O suplemento está no estoque — use Fabricar para produzir.");
 }

@@ -23,24 +23,21 @@ const PRODUTOS = JSON.stringify([
 ]);
 const FABRICADOS = JSON.stringify(["2", "4"]);
 
-test("fabricados vêm primeiro, em grupo próprio", () => {
+test("trato lista só suplementos, sem matéria-prima", () => {
   const html = run(`productSelectHtml(${PRODUTOS}, ${FABRICADOS})`);
-  assert.ok(html.indexOf("Fabricados") < html.indexOf("Comprados"), "grupo dos fabricados tem que vir antes");
-  assert.ok(html.indexOf("Proteinado 0,3") < html.indexOf("Milho moído"), "produto fabricado tem que vir antes do comprado");
+  assert.match(html, /Proteinado 0,3/);
+  assert.match(html, /Ração engorda/);
+  assert.doesNotMatch(html, /Milho moído/);
+  assert.doesNotMatch(html, /Ureia/);
 });
 
-test("cada grupo sai em ordem alfabética", () => {
+test("suplementos saem em ordem alfabética", () => {
   const html = run(`productSelectHtml(${PRODUTOS}, ${FABRICADOS})`);
   assert.ok(html.indexOf("Proteinado 0,3") < html.indexOf("Ração engorda"));
-  assert.ok(html.indexOf("Milho moído") < html.indexOf("Ureia"));
 });
 
-test("sem fabricado, não cria grupo vazio", () => {
+test("sem suplemento, avisa em vez de oferecer matéria-prima", () => {
   const html = run(`productSelectHtml(${PRODUTOS}, [])`);
-  assert.doesNotMatch(html, /Fabricados/);
-  assert.match(html, /Milho moído/);
-});
-
-test("sem produto nenhum, avisa em vez de vir vazio", () => {
-  assert.match(run("productSelectHtml([], [])"), /Nenhum produto cadastrado/);
+  assert.match(html, /Nenhum suplemento cadastrado/);
+  assert.doesNotMatch(html, /Milho moído/);
 });

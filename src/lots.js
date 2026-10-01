@@ -107,27 +107,14 @@ function renderLots() {
 
 function lotGroupRowHtml(group) {
   return `<div class="groupBox lotGroupRow">
-    <button class="rowRemove" data-do="removeLotGroup" aria-label="Remover categoria" title="Remover categoria">${icon("trash")}</button>
-    <div class="grid lotGroupGrid">
+    <div class="grid">
       <div class="full"><label>Categoria dos animais</label><input class="lotCategory" placeholder="Ex.: Novilha de engorda" value="${esc(group?.category || "")}"></div>
       <div><label>Quantidade de animais</label><input class="lotQty decimal" type="text" inputmode="numeric" placeholder="Ex.: 120" value="${esc(group ? String(group.quantity ?? "") : "")}"></div>
       <div><label>Peso médio (kg)</label><input class="lotWeight decimal" type="text" inputmode="decimal" placeholder="Ex.: 380" value="${esc(group ? String(group.avg_weight_kg ?? "").replace(".", ",") : "")}"></div>
-      <div class="full"><label>Produto</label><select class="lotProduct">${productOptionsHtml(group?.product_id || "")}</select></div>
+      <div class="full"><label>Suplemento</label><select class="lotProduct">${supplementOptionsHtml(group?.product_id || "")}</select></div>
       <div class="full"><label>Consumo esperado (kg/cabeça/dia)</label><input class="lotExpected decimal" type="text" inputmode="decimal" placeholder="Ex.: 0,08" value="${esc(group ? String(group.expected_consumption_kg_head_day ?? "").replace(".", ",") : "")}"></div>
     </div>
   </div>`;
-}
-
-function addLotGroup(group = null) {
-  const holder = document.createElement("div");
-  holder.innerHTML = lotGroupRowHtml(group);
-  $("sheetLotGroups").appendChild(holder.firstElementChild);
-}
-
-function removeLotGroup(button) {
-  const rows = document.querySelectorAll("#sheetLotGroups .lotGroupRow");
-  if (rows.length <= 1) return showAlert("O lote precisa de pelo menos uma categoria.");
-  button.closest(".lotGroupRow").remove();
 }
 
 function readLotGroups() {
@@ -141,17 +128,21 @@ function readLotGroups() {
 }
 
 function validateLotGroups(groups) {
-  if (!groups.length) return "Adicione ao menos uma categoria.";
-  if (groups.some(group => !group.category)) return "Informe a categoria de todas as linhas.";
-  if (groups.some(group => !Number.isInteger(group.quantity) || group.quantity < 0)) {
-    return "A quantidade de animais precisa ser um número inteiro.";
-  }
-  if (groups.some(group => !(group.avg_weight_kg > 0))) return "Informe o peso médio de todas as linhas.";
-  if (groups.some(group => !group.product_id)) return "Escolha o produto de todas as categorias.";
-  if (groups.some(group => !(group.expected_consumption_kg_head_day >= 0))) {
-    return "Informe o consumo esperado de todas as linhas.";
-  }
+  if (groups.length !== 1) return "O lote tem exatamente uma categoria.";
+  const [group] = groups;
+  if (!group.category) return "Informe a categoria dos animais.";
+  if (!Number.isInteger(group.quantity) || group.quantity < 0) return "A quantidade de animais precisa ser um número inteiro.";
+  if (!(group.avg_weight_kg > 0)) return "Informe o peso médio.";
+  if (!group.product_id) return "Escolha o suplemento.";
+  if (!(group.expected_consumption_kg_head_day >= 0)) return "Informe o consumo esperado.";
   return "";
+}
+
+function legacyGroupsNote(info) {
+  const extra = (info?.groups.length || 0) - 1;
+  return extra > 0
+    ? `<div class="small emptyBox">Este lote tinha ${info.groups.length} categorias. Agora o lote tem uma só: ao salvar, fica apenas a categoria abaixo (a de mais animais).</div>`
+    : "";
 }
 
 function renderLotEditor(container, sheet, lot) {
@@ -164,16 +155,13 @@ function renderLotEditor(container, sheet, lot) {
         <div class="small">A partir desta data a composição passa a valer. Se já existir uma configuração nesta data, ela será atualizada; em outra data, uma nova vigência será criada. Para trocar só o suplemento, use <b>Alterar suplemento</b> no lote.</div>
       </div>
     </div>
-    <div class="itemsHead">Categorias do lote</div>
-    <div id="sheetLotGroups"></div>
-    <div class="itemsAdd"><button class="btn alt" data-do="addLotGroup">+ Adicionar categoria</button></div>
+    <div class="itemsHead">Categoria do lote</div>
+    ${legacyGroupsNote(info)}
+    <div id="sheetLotGroups">${lotGroupRowHtml(lotMainGroup(info))}</div>
     <div class="full"><label>Observação da alteração (opcional)</label><textarea id="sheetLotNote" placeholder="Ex.: apartação de 50 novilhas"></textarea></div>
     <input type="hidden" id="sheetLotEditId" value="${esc(lot?.id || "")}">`;
 
   sheet.setFooter('<button class="btn" id="sheetLotSaveBtn" data-do="saveLot">Salvar lote</button><div id="sheetLotMsg"></div>');
-
-  if (info && info.groups.length) info.groups.forEach(group => addLotGroup(group));
-  else addLotGroup();
 }
 
 function openLotSheet(lot) {
@@ -181,7 +169,7 @@ function openLotSheet(lot) {
     title: lot ? "Editar lote" : "Novo lote",
     subtitle: lot
       ? "Na mesma data, salvar atualiza a vigência existente; em outra data, cria uma nova."
-      : "Cadastre as categorias de animais e o produto que cada uma recebe.",
+      : "Cadastre a categoria dos animais e o suplemento que ela recebe.",
     tabs: [{
       id: "lote",
       label: "Lote",
@@ -234,15 +222,16 @@ function renderLotSupplement(container, sheet, lot, info) {
   container.innerHTML = `
     <div class="grid">
       <div class="full"><label>Data de vigência da mudança</label><input id="sheetLotEffective" type="date" value="${esc(farmDateISO())}">
-        <div class="small">Categoria, quantidade de animais e peso médio continuam iguais. Só o produto e o consumo esperado mudam a partir desta data. Se já houver uma configuração nesta data, ela será atualizada.</div>
+        <div class="small">Categoria, quantidade de animais e peso médio continuam iguais. Só o suplemento e o consumo esperado mudam a partir desta data. Se já houver uma configuração nesta data, ela será atualizada.</div>
       </div>
     </div>
-    <div class="itemsHead">Categorias</div>
-    <div id="sheetLotGroups">${info.groups.map(group => `<div class="groupBox lotGroupRow">
+    <div class="itemsHead">Categoria</div>
+    ${legacyGroupsNote(info)}
+    <div id="sheetLotGroups">${[lotMainGroup(info)].map(group => `<div class="groupBox lotGroupRow">
       <b>${esc(group.category)}</b>
       <div class="small">${Number(group.quantity || 0).toLocaleString("pt-BR")} animais · ${esc(SupUnits.formatKg(group.avg_weight_kg))}</div>
       <div class="grid">
-        <div class="full"><label>Novo produto</label><select class="lotProduct">${productOptionsHtml(group.product_id || "")}</select></div>
+        <div class="full"><label>Novo suplemento</label><select class="lotProduct">${supplementOptionsHtml(group.product_id || "")}</select></div>
         <div class="full"><label>Novo consumo esperado (kg/cabeça/dia)</label><input class="lotExpected decimal" type="text" inputmode="decimal" value="${esc(String(group.expected_consumption_kg_head_day ?? "").replace(".", ","))}"></div>
       </div>
       <input type="hidden" class="lotCategory" value="${esc(group.category)}">

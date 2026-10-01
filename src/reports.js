@@ -154,8 +154,6 @@ function reportSources() {
       map: row => ({
         Produto: row.name,
         "Saldo (kg)": Number(row.quantity_kg),
-        "Unidade de exibição": row.display_unit || "kg",
-        "Saldo na unidade": Number(SupUnits.fromKg(row.quantity_kg, row.display_unit || "kg", row)),
         "Saldo negativo": row.negative ? "Sim" : "Não",
         "Custo médio": Number(row.avg_unit_cost)
       })

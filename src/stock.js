@@ -1,31 +1,65 @@
 let stockRows = [];
+let stockKind = "raw";
+
+const STOCK_KIND_LABELS = {
+  raw: { create: "Nova matéria-prima", empty: "Nenhuma matéria-prima encontrada." },
+  supplement: { create: "Nova fórmula", empty: "Nenhum suplemento encontrado." }
+};
 
 function stockRowById(id) {
   return stockRows.find(row => row.product_id === id);
 }
 
+function isRawMaterial(item) {
+  return !item.manufactured;
+}
+
+function rawMaterialRows() {
+  return stockRows.filter(isRawMaterial);
+}
+
+function supplementRows() {
+  return stockRows.filter(item => item.manufactured);
+}
+
 function stockStatusHtml(item) {
   const pills = [];
   if (item.negative) pills.push('<span class="pill danger">SALDO NEGATIVO</span>');
-  if (item.manufactured) pills.push('<span class="pill">FABRICADO</span>');
   if (!item.active) pills.push('<span class="pill">INATIVO</span>');
   return pills.join(" ");
 }
 
+function showStockKind(kind) {
+  stockKind = kind;
+  renderStock();
+}
+
+function stockCreate() {
+  if (stockKind === "supplement") return openFormulaCreate();
+  openStockCreate();
+}
+
 function stockFilter() {
   const term = ($("stockSearch").value || "").trim().toLowerCase();
-  return term ? stockRows.filter(item => item.name.toLowerCase().includes(term)) : stockRows;
+  const rows = stockKind === "supplement" ? supplementRows() : rawMaterialRows();
+  return term ? rows.filter(item => item.name.toLowerCase().includes(term)) : rows;
 }
 
 function renderStock() {
+  const labels = STOCK_KIND_LABELS[stockKind];
+  document.querySelectorAll("#stockKindTabs .tab").forEach(button => {
+    button.classList.toggle("on", button.dataset.arg === stockKind);
+  });
+  $("stockCreateBtn").textContent = labels.create;
+
   const rows = stockFilter().map(item => {
-    const saldo = SupUnits.formatQuantity(item.quantity_kg, item);
+    const saldo = SupUnits.formatKg(item.quantity_kg);
     const status = stockStatusHtml(item);
     const gear = `<button class="iconBtn" data-do="stockManage" data-arg="${item.product_id}" aria-label="Gerenciar ${esc(item.name)}">${icon("gear")}</button>`;
     return {
       table: `<tr>
         <td><b>${esc(item.name)}</b>${status ? `<div class="rowPills">${status}</div>` : ""}</td>
-        <td class="num">${esc(saldo.main)}${saldo.secondary ? `<div class="small">${esc(saldo.secondary)}</div>` : ""}</td>
+        <td class="num">${esc(saldo)}</td>
         <td class="num">${fmtMoney(item.avg_unit_cost)}</td>
         <td class="act">${gear}</td>
       </tr>`,
@@ -36,8 +70,7 @@ function renderStock() {
             <div class="small">custo médio ${fmtMoney(item.avg_unit_cost)}</div>
           </div>
           <div class="stockQty">
-            <b>${esc(saldo.main)}</b>
-            ${saldo.secondary ? `<span class="small">${esc(saldo.secondary)}</span>` : ""}
+            <b>${esc(saldo)}</b>
           </div>
         </div>
         ${status ? `<div class="rowPills">${status}</div>` : ""}
@@ -46,8 +79,8 @@ function renderStock() {
     };
   });
 
-  $("stockTableBody").innerHTML = rows.map(row => row.table).join("") || '<tr><td colspan="4" class="small">Nenhum produto encontrado.</td></tr>';
-  $("stockList").innerHTML = rows.map(row => row.card).join("") || '<div class="small">Nenhum produto encontrado.</div>';
+  $("stockTableBody").innerHTML = rows.map(row => row.table).join("") || `<tr><td colspan="4" class="small">${labels.empty}</td></tr>`;
+  $("stockList").innerHTML = rows.map(row => row.card).join("") || `<div class="small">${labels.empty}</div>`;
 }
 
 async function loadStock() {

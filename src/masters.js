@@ -1,15 +1,15 @@
-function productSelectHtml(list, manufacturedIds) {
+function supplementProducts(list, manufacturedIds) {
   const fabricados = new Set(manufacturedIds || []);
-  const byName = (a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' });
-  const option = item => `<option value="${item.id}">${esc(item.name)}</option>`;
-  const feitos = (list || []).filter(item => fabricados.has(item.id)).sort(byName);
-  const comprados = (list || []).filter(item => !fabricados.has(item.id)).sort(byName);
+  return (list || [])
+    .filter(item => fabricados.has(item.id))
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
+}
 
-  if (!feitos.length && !comprados.length) return '<option value="">Nenhum produto cadastrado</option>';
-  if (!feitos.length) return comprados.map(option).join('');
-
-  return `<optgroup label="Fabricados na fazenda">${feitos.map(option).join('')}</optgroup>`
-    + (comprados.length ? `<optgroup label="Comprados">${comprados.map(option).join('')}</optgroup>` : '');
+function productSelectHtml(list, manufacturedIds) {
+  const suplementos = supplementProducts(list, manufacturedIds);
+  if (!suplementos.length) return '<option value="">Nenhum suplemento cadastrado</option>';
+  return '<option value="">Todos os suplementos</option>'
+    + suplementos.map(item => `<option value="${item.id}">${esc(item.name)}</option>`).join('');
 }
 
 const MASTERS_MAX_AGE_MS = 120000;
@@ -24,11 +24,14 @@ async function loadMasters(opcoes={}){
 
   if(lotesRes.value)lots=lotesRes.value;
   if(produtosRes.value)products=produtosRes.value;
-  const manufacturedIds=formulasRes.value||[];
+  if(formulasRes.value)supplementIds=formulasRes.value;
+  const manufacturedIds=supplementIds;
 
   const activeLots=lots.filter(x=>x.active), activeProducts=products.filter(x=>x.active);
   if(lotesRes.value){
-    $('lot').innerHTML=activeLots.length?activeLots.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join(''):'<option value="">Nenhum lote cadastrado</option>';
+    const chosenLot=$('lot').value;
+    $('lot').innerHTML=activeLots.length?'<option value="">Escolha o lote…</option>'+activeLots.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join(''):'<option value="">Nenhum lote cadastrado</option>';
+    if(chosenLot)$('lot').value=chosenLot;
     $('reportLot').innerHTML='<option value="">Todos</option>'+activeLots.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');
   }
   if(produtosRes.value){
