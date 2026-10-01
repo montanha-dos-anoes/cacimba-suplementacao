@@ -31,6 +31,7 @@ defineActions('click',{
   deactivateFormula:(el,arg)=>runAction(el,()=>deactivateFormula(arg),'Inativando…'),
   reportPage:(el,arg)=>goToReportPage(Number(arg)),
   runReport:el=>runAction(el,runReport,'Pesquisando…'),
+  reportClearChecks:(el,arg)=>clearReportChecks(arg),
   exportPdf:el=>runAction(el,exportReportPdf,'Gerando PDF…'),
   exportXlsx:el=>runAction(el,exportReport,'Gerando Excel…'),
   lotCreate:()=>openLotCreate(),
@@ -59,6 +60,8 @@ defineActions('change',{
   refreshEntryPlan:()=>refreshEntryPlan(),
   reportType:()=>onReportTypeChange(),
   reportLotStatus:()=>onReportLotStatusChange(),
+  reportCategory:()=>onReportMovementFilterChange(true),
+  reportDirection:()=>onReportMovementFilterChange(false),
   reportFilter:()=>markReportStale()
 });
 

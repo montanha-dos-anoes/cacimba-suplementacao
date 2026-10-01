@@ -185,6 +185,10 @@
           </div>
           <div id="reportFromBox"><label>Data inicial</label><input id="reportFrom" type="date" data-clearable="1" data-change="reportFilter"></div>
           <div id="reportToBox"><label>Data final</label><input id="reportTo" type="date" data-clearable="1" data-change="reportFilter"></div>
+          <div class="hidden" id="reportCategoryBox"><label>Categoria</label><select id="reportCategory" data-change="reportCategory"><option value="raw">Matérias-primas</option><option value="supplement">Suplementos</option></select></div>
+          <div class="hidden" id="reportDirectionBox"><label>Movimento</label><select id="reportDirection" data-change="reportDirection"><option value="all">Todas</option><option value="in">Entradas</option><option value="out">Saídas</option></select></div>
+          <div class="full hidden" id="reportKindsBox"><div class="checkHead"><label>Tipo <span class="small">(nenhum marcado = todos)</span></label><button class="btn alt smallbtn" type="button" data-do="reportClearChecks" data-arg="reportKinds">Limpar</button></div><div class="checkGrid" id="reportKinds"></div></div>
+          <div class="full hidden" id="reportItemsBox"><div class="checkHead"><label>Itens <span class="small">(nenhum marcado = todos)</span></label><button class="btn alt smallbtn" type="button" data-do="reportClearChecks" data-arg="reportItems">Limpar</button></div><div class="checkGrid scroll" id="reportItems"></div></div>
           <div class="hidden" id="reportLotStatusBox"><label>Status do lote</label><select id="reportLotStatus" data-change="reportLotStatus"><option value="active">Lotes ativos</option><option value="closed">Lotes encerrados</option></select></div>
           <div class="hidden" id="reportLotBox"><label>Lote</label><select id="reportLot" data-change="reportFilter"></select></div>
           <div class="full"><button class="btn" id="reportSearchBtn" style="width:100%" data-do="runReport">Pesquisar</button></div>
@@ -246,29 +250,29 @@
 <div id="modalRoot"></div>
 <div id="toastRoot"></div>
 
-<script src="./src/config.js?v=1.18.1"></script>
-<script src="./src/api.js?v=1.18.1"></script>
-<script src="./src/state.js?v=1.18.1"></script>
-<script src="./src/farm-time.js?v=1.18.1"></script>
-<script src="./src/offline.js?v=1.18.1"></script>
-<script src="./src/units.js?v=1.18.1"></script>
-<script src="./src/balance-guard.js?v=1.18.1"></script>
-<script src="./src/ui.js?v=1.18.1"></script>
-<script src="./src/outbox.js?v=1.18.1"></script>
-<script src="./src/nav.js?v=1.18.1"></script>
-<script src="./src/modal.js?v=1.18.1"></script>
-<script src="./src/datefield.js?v=1.18.1"></script>
-<script src="./src/auth.js?v=1.18.1"></script>
-<script src="./src/feeding.js?v=1.18.1"></script>
-<script src="./src/masters.js?v=1.18.1"></script>
-<script src="./src/lots.js?v=1.18.1"></script>
-<script src="./src/stock.js?v=1.18.1"></script>
-<script src="./src/stock-manage.js?v=1.18.1"></script>
-<script src="./src/formulas.js?v=1.18.1"></script>
-<script src="./src/production.js?v=1.18.1"></script>
-<script src="./src/feeding-report.js?v=1.18.1"></script>
-<script src="./src/reports.js?v=1.18.1"></script>
-<script src="./src/home.js?v=1.18.1"></script>
-<script src="./src/bootstrap.js?v=1.18.1"></script>
+<script src="./src/config.js?v=1.19.0"></script>
+<script src="./src/api.js?v=1.19.0"></script>
+<script src="./src/state.js?v=1.19.0"></script>
+<script src="./src/farm-time.js?v=1.19.0"></script>
+<script src="./src/offline.js?v=1.19.0"></script>
+<script src="./src/units.js?v=1.19.0"></script>
+<script src="./src/balance-guard.js?v=1.19.0"></script>
+<script src="./src/ui.js?v=1.19.0"></script>
+<script src="./src/outbox.js?v=1.19.0"></script>
+<script src="./src/nav.js?v=1.19.0"></script>
+<script src="./src/modal.js?v=1.19.0"></script>
+<script src="./src/datefield.js?v=1.19.0"></script>
+<script src="./src/auth.js?v=1.19.0"></script>
+<script src="./src/feeding.js?v=1.19.0"></script>
+<script src="./src/masters.js?v=1.19.0"></script>
+<script src="./src/lots.js?v=1.19.0"></script>
+<script src="./src/stock.js?v=1.19.0"></script>
+<script src="./src/stock-manage.js?v=1.19.0"></script>
+<script src="./src/formulas.js?v=1.19.0"></script>
+<script src="./src/production.js?v=1.19.0"></script>
+<script src="./src/feeding-report.js?v=1.19.0"></script>
+<script src="./src/reports.js?v=1.19.0"></script>
+<script src="./src/home.js?v=1.19.0"></script>
+<script src="./src/bootstrap.js?v=1.19.0"></script>
 </body>
 </html>

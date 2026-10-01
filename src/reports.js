@@ -50,6 +50,93 @@ function buildReportTable(rows, columns) {
   };
 }
 
+const MOVEMENT_KINDS = {
+  in: ["entry", "yield", "reversal", "adjustment"],
+  out: ["consumption", "feeding", "sale", "reversal", "adjustment"],
+  all: ["entry", "yield", "consumption", "feeding", "sale", "reversal", "adjustment"]
+};
+
+const MOVEMENT_DIRECTION_LABELS = { in: "Entradas", out: "Saídas", all: "Entradas e saídas" };
+const MOVEMENT_CATEGORY_LABELS = { raw: "Matérias-primas", supplement: "Suplementos" };
+
+function movementKindsFor(direction) {
+  return [...(MOVEMENT_KINDS[direction] || MOVEMENT_KINDS.all)];
+}
+
+function reportCategoryProducts(list, supplementIds, category) {
+  const supplements = new Set(supplementIds || []);
+  const wantSupplement = category === "supplement";
+  return (list || [])
+    .filter(item => supplements.has(item.id) === wantSupplement)
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }))
+    .map(item => ({ id: item.id, label: item.active === false ? `${item.name} (inativo)` : item.name }));
+}
+
+function movementProductFilter(category, itemIds, supplementIds) {
+  if (itemIds.length) return { op: "in", ids: [...itemIds] };
+  const supplements = [...(supplementIds || [])];
+  if (category === "supplement") return supplements.length ? { op: "in", ids: supplements } : { op: "none", ids: [] };
+  return supplements.length ? { op: "not_in", ids: supplements } : { op: "any", ids: [] };
+}
+
+function movementQueryPlan({ direction, category, itemIds, kinds, supplementIds }) {
+  const available = new Set(movementKindsFor(direction));
+  const signs = { in: "positive", out: "negative" };
+  return {
+    sign: signs[direction] || null,
+    kinds: (kinds || []).filter(kind => available.has(kind)),
+    product: movementProductFilter(category, itemIds || [], supplementIds)
+  };
+}
+
+function applyMovementPlan(query, plan) {
+  let scoped = query;
+  if (plan.sign === "positive") scoped = scoped.gt("quantity_kg", 0);
+  if (plan.sign === "negative") scoped = scoped.lt("quantity_kg", 0);
+  if (plan.kinds.length) scoped = scoped.in("kind", plan.kinds);
+  if (plan.product.op === "in") scoped = scoped.in("product_id", plan.product.ids);
+  if (plan.product.op === "not_in") scoped = scoped.not("product_id", "in", `(${plan.product.ids.join(",")})`);
+  if (plan.product.op === "none") scoped = scoped.is("id", null);
+  return scoped;
+}
+
+function movementFilterLabel({ direction, category, itemNames, kindLabels }) {
+  return [
+    MOVEMENT_DIRECTION_LABELS[direction] || MOVEMENT_DIRECTION_LABELS.all,
+    MOVEMENT_CATEGORY_LABELS[category] || MOVEMENT_CATEGORY_LABELS.raw,
+    (itemNames || []).join(", "),
+    (kindLabels || []).join(", ")
+  ].filter(Boolean).join(" · ");
+}
+
+function movementReportRow(row, direction) {
+  const quantity = Number(row.quantity_kg);
+  return {
+    Data: farmDateTimeBR(row.occurred_at),
+    Produto: row.suplementacao_products?.name || "",
+    Tipo: STOCK_KINDS[row.kind] || row.kind,
+    Quantidade: direction === "all" ? quantity : Math.abs(quantity),
+    "Valor unitário": Number(row.unit_cost),
+    Fornecedor: row.supplier || "",
+    Motivo: row.reason || ""
+  };
+}
+
+function productionReportRow(row) {
+  const quantity = Number(row.quantity_kg);
+  const totalCost = Number(row.total_cost);
+  return {
+    Data: farmDateTimeBR(row.occurred_at),
+    Fórmula: row.suplementacao_formulas?.name || "",
+    Produto: row.products?.name || "",
+    "Quantidade (kg)": quantity,
+    "Custo total": totalCost,
+    "Custo por kg": quantity ? totalCost / quantity : 0,
+    Situação: row.reversed_at ? "Estornada" : "Ativa",
+    Itens: (row.suplementacao_production_items || []).map(item => `${item.suplementacao_products?.name}: ${Number(item.quantity).toLocaleString("pt-BR")} kg`).join(" | ")
+  };
+}
+
 function reportRange() {
   const from = $("reportFrom").value ? new Date(`${$("reportFrom").value}T00:00:00`) : null;
   const to = $("reportTo").value ? new Date(`${$("reportTo").value}T23:59:59`) : null;
@@ -69,6 +156,46 @@ function reportUsesPeriod() {
 
 function isFeedingReport() {
   return $("reportType").value === "feeding";
+}
+
+function isMovementReport() {
+  return $("reportType").value === "movements";
+}
+
+function checkedValues(containerId) {
+  return [...$(containerId).querySelectorAll("input[type=checkbox]:checked")].map(input => input.value);
+}
+
+function renderReportChecks(containerId, options, keep) {
+  const kept = new Set(keep);
+  $(containerId).innerHTML = options.length
+    ? options.map(option => `<label class="checkChip"><input type="checkbox" value="${esc(option.value)}" data-change="reportFilter" ${kept.has(option.value) ? "checked" : ""}><span>${esc(option.label)}</span></label>`).join("")
+    : '<div class="small">Nenhum item nesta categoria.</div>';
+}
+
+function movementFilters() {
+  return {
+    direction: $("reportDirection").value,
+    category: $("reportCategory").value,
+    itemIds: checkedValues("reportItems"),
+    kinds: checkedValues("reportKinds")
+  };
+}
+
+function refreshMovementFilters({ resetItems = false } = {}) {
+  const { direction, category } = movementFilters();
+  renderReportChecks("reportKinds", movementKindsFor(direction).map(kind => ({ value: kind, label: STOCK_KINDS[kind] || kind })), checkedValues("reportKinds"));
+  renderReportChecks("reportItems", reportCategoryProducts(products, supplementIds, category).map(item => ({ value: item.id, label: item.label })), resetItems ? [] : checkedValues("reportItems"));
+}
+
+function onReportMovementFilterChange(resetItems) {
+  refreshMovementFilters({ resetItems });
+  markReportStale();
+}
+
+function clearReportChecks(containerId) {
+  $(containerId).querySelectorAll("input[type=checkbox]").forEach(input => { input.checked = false; });
+  markReportStale();
 }
 
 function populateReportLots() {
@@ -117,6 +244,9 @@ function onReportTypeChange() {
   $("reportToBox").classList.toggle("hidden", !usesPeriod);
   $("reportLotBox").classList.toggle("hidden", !porLote);
   $("reportLotStatusBox").classList.toggle("hidden", !porLote);
+  const movimentos = isMovementReport();
+  ["reportCategoryBox", "reportDirectionBox", "reportKindsBox", "reportItemsBox"].forEach(id => $(id).classList.toggle("hidden", !movimentos));
+  if (movimentos) refreshMovementFilters();
   if (porLote) {
     populateReportLots();
     feedingReportPeriod();
@@ -143,6 +273,8 @@ function reportSources() {
   };
   const lot = $("reportLot").value;
   const readings = { empty: "Vazio", medium: "Médio", full: "Cheio" };
+  const movement = movementFilters();
+  const movementPlan = movementQueryPlan({ ...movement, supplementIds });
 
   return {
     stock: {
@@ -164,16 +296,14 @@ function reportSources() {
       countColumn: "id",
       select: "*, suplementacao_products(name)",
       order: [["occurred_at", false], ["id", false]],
-      filter: period,
-      map: row => ({
-        Data: farmDateTimeBR(row.occurred_at),
-        Produto: row.suplementacao_products?.name || "",
-        Tipo: STOCK_KINDS[row.kind] || row.kind,
-        Quantidade: Number(row.quantity_kg),
-        "Valor unitário": Number(row.unit_cost),
-        Fornecedor: row.supplier || "",
-        Motivo: row.reason || ""
-      })
+      subtitle: movementFilterLabel({
+        direction: movement.direction,
+        category: movement.category,
+        itemNames: movement.itemIds.map(id => products.find(item => item.id === id)?.name || ""),
+        kindLabels: movementPlan.kinds.map(kind => STOCK_KINDS[kind] || kind)
+      }),
+      filter: query => applyMovementPlan(period(query), movementPlan),
+      map: row => movementReportRow(row, movement.direction)
     },
     productions: {
       name: "fabricacoes",
@@ -182,15 +312,7 @@ function reportSources() {
       select: "*, suplementacao_formulas(name), products:suplementacao_products(name), suplementacao_production_items(quantity, suplementacao_products(name))",
       order: [["occurred_at", false], ["id", false]],
       filter: period,
-      map: row => ({
-        Data: farmDateTimeBR(row.occurred_at),
-        Fórmula: row.suplementacao_formulas?.name || "",
-        Produto: row.products?.name || "",
-        "Quantidade (kg)": Number(row.quantity_kg),
-        "Custo total": Number(row.total_cost),
-        Situação: row.reversed_at ? "Estornada" : "Ativa",
-        Itens: (row.suplementacao_production_items || []).map(item => `${item.suplementacao_products?.name}: ${Number(item.quantity).toLocaleString("pt-BR")} kg`).join(" | ")
-      })
+      map: productionReportRow
     },
     feeding: {
       name: "consumo_por_lote",
@@ -376,6 +498,7 @@ function renderFeedingReport(lotName) {
 async function runReport() {
   clearReportStale();
   if (isFeedingReport()) return runFeedingReport();
+  if (isMovementReport()) refreshMovementFilters();
   const source = reportSources()[$("reportType").value];
   if (!source) return;
   reportSource = source;
@@ -432,7 +555,7 @@ function renderReportPage(info) {
   $("reportExportBtn").disabled = !info.total;
   $("reportPdfBtn").disabled = !info.total;
 
-  const title = `${REPORT_LABELS[$("reportType").value] || "Relatório"} · ${reportPeriodLabel()}`;
+  const title = [REPORT_LABELS[$("reportType").value] || "Relatório", reportSource?.subtitle, reportPeriodLabel()].filter(Boolean).join(" · ");
   const counter = info.total ? `${info.from}–${info.to} de ${info.total}` : "nenhum registro";
   const head = `<div class="reportHead"><span class="planHead">${esc(title)}</span><span class="small">${esc(counter)}</span></div>`;
 
@@ -576,10 +699,15 @@ async function exportReportPdf() {
   doc.text(title, 14, 38);
   doc.setFontSize(9.5);
   doc.setTextColor(92, 106, 92);
-  doc.text(`Período: ${reportPeriodLabel()}`, 14, 44);
-  doc.text(`${rows.length.toLocaleString("pt-BR")} registro(s)`, 14, 49);
+  const filtros = !isFeedingReport() && reportSource?.subtitle
+    ? doc.splitTextToSize(`Filtros: ${reportSource.subtitle}`, pageWidth - 28)
+    : [];
+  const deslocamento = filtros.length * 5;
+  if (filtros.length) doc.text(filtros, 14, 44);
+  doc.text(`Período: ${reportPeriodLabel()}`, 14, 44 + deslocamento);
+  doc.text(`${rows.length.toLocaleString("pt-BR")} registro(s)`, 14, 49 + deslocamento);
 
-  let inicioTabela = 55;
+  let inicioTabela = 55 + deslocamento;
   if (isFeedingReport() && feedingReport) {
     const lote = lots.find(item => item.id === $("reportLot").value)?.name || "Lote";
     doc.setTextColor(30, 43, 34);

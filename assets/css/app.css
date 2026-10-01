@@ -154,6 +154,12 @@ select:focus{border-color:var(--verde);outline:none}
 input.decimal{font-variant-numeric:tabular-nums}
 .checkLine label{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;color:#2c3b2f;cursor:pointer}
 .checkLine input[type=checkbox]{width:18px;height:18px;flex:none;padding:0;accent-color:var(--verde)}
+.checkHead{display:flex;align-items:end;justify-content:space-between;gap:10px}
+.checkGrid{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.checkGrid.scroll{max-height:220px;overflow-y:auto;padding:2px}
+.checkChip{display:flex;align-items:center;gap:7px;margin:0;padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface-2);font-size:13px;font-weight:600;color:#2c3b2f;cursor:pointer}
+.checkChip input[type=checkbox]{width:16px;height:16px;flex:none;padding:0;margin:0;accent-color:var(--verde)}
+.checkChip:has(input:checked){border-color:var(--verde);background:var(--ok-bg)}
 .homeGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
 .homeCard{border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--surface-2);display:flex;flex-direction:column;gap:2px}
 .homeCard.bad{background:var(--danger-bg);border-color:#eecac4}

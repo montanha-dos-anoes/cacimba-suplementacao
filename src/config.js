@@ -15,7 +15,7 @@ const SUP_ENV =
 const SUP_CONFIG = Object.freeze({
   ...SUP_ENVS[SUP_ENV],
   env: SUP_ENV,
-  appVersion: "1.18.1",
+  appVersion: "1.19.0",
   requestTimeoutMs: 10000,
   offlineRetryMs: 20000,
   probeTimeoutMs: 4000
