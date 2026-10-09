@@ -8,17 +8,25 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const read = path => readFileSync(resolve(root, path), "utf8");
 
-function api({ respostaEmMs = 5, timeoutMs = 40 } = {}) {
+function api({ respostaEmMs = 5, timeoutMs = 40, status = 200 } = {}) {
   const conexao = [];
   const abortadas = [];
+  const requests = [];
   const context = vm.createContext({
     Promise, Date, console, Error, TypeError, AbortController, setTimeout, clearTimeout,
-    SUP_CONFIG: { supabaseUrl: "https://ref.supabase.co", supabasePublishableKey: "k", requestTimeoutMs: timeoutMs },
+    SUP_CONFIG: {
+      supabaseUrl: "https://ref.supabase.co",
+      supabasePublishableKey: "k",
+      requestTimeoutMs: timeoutMs,
+      probeTimeoutMs: timeoutMs
+    },
     noteConnection: reachable => conexao.push(reachable),
+    isOffline: () => false,
     isNetworkError: error => /Failed to fetch|NetworkError|tempo esgotado/i.test(String(error?.message || error || "")),
     supabase: { createClient: (url, key, options) => ({ url, key, options, auth: {}, rpc: async () => ({ data: null, error: null }) }) },
     fetch: (input, init = {}) => new Promise((resolve, reject) => {
-      const timer = setTimeout(() => resolve({ ok: true, status: 200 }), respostaEmMs);
+      requests.push({ input: String(input), init });
+      const timer = setTimeout(() => resolve({ ok: status >= 200 && status < 300, status }), respostaEmMs);
       init.signal?.addEventListener("abort", () => {
         clearTimeout(timer);
         abortadas.push(String(input));
@@ -27,7 +35,7 @@ function api({ respostaEmMs = 5, timeoutMs = 40 } = {}) {
     })
   });
   vm.runInContext(read("src/api.js"), context);
-  return { run: expression => vm.runInContext(expression, context), conexao, abortadas };
+  return { run: expression => vm.runInContext(expression, context), conexao, abortadas, requests };
 }
 
 test("o cliente supabase usa o fetch com prazo, senão cada chamada fica pendurada", () => {
@@ -56,6 +64,18 @@ test("resposta do servidor confirma a conexão, mesmo com status de erro", async
   const { run, conexao } = api({ respostaEmMs: 1, timeoutMs: 500 });
   await run('supFetch("https://ref.supabase.co/x")');
   assert.deepEqual(conexao, [true]);
+});
+
+test("a sondagem de conexão envia a chave pública ao Supabase", async () => {
+  const { run, requests } = api();
+  assert.equal(await run("probeConnection()"), true);
+  assert.equal(requests[0].input, "https://ref.supabase.co/auth/v1/health");
+  assert.equal(requests[0].init.headers.apikey, "k");
+});
+
+test("a sondagem não aceita uma resposta HTTP de erro como conexão válida", async () => {
+  const { run } = api({ status: 401 });
+  assert.equal(await run("probeConnection()"), false);
 });
 
 test("o prazo é configurável num lugar só", () => {

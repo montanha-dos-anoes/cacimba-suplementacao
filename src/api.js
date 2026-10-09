@@ -36,8 +36,11 @@ function probeConnection() {
   conexaoConferida = (async () => {
     if (isOffline()) return false;
     try {
-      await supFetch(`${SUP_CONFIG.supabaseUrl}/auth/v1/health`, { method: "GET" }, SUP_CONFIG.probeTimeoutMs);
-      return true;
+      const response = await supFetch(`${SUP_CONFIG.supabaseUrl}/auth/v1/health`, {
+        method: "GET",
+        headers: { apikey: SUP_CONFIG.supabasePublishableKey }
+      }, SUP_CONFIG.probeTimeoutMs);
+      return response.ok;
     } catch {
       return false;
     }
