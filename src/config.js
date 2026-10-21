@@ -13,7 +13,7 @@ const SUP_ENV = SUP_AMBIENTES.length === 1 ? SUP_AMBIENTES[0] : SUP_ENV_PADRAO;
 const SUP_CONFIG = Object.freeze({
   ...SUP_ENVS[SUP_ENV],
   env: SUP_ENV,
-  appVersion: "1.19.1",
+  appVersion: "1.19.2",
   requestTimeoutMs: 10000,
   offlineRetryMs: 20000,
   probeTimeoutMs: 4000

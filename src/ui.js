@@ -145,6 +145,7 @@ async function runAction(button, work, waitingLabel = "Salvando…", { offline =
 }
 
 let connectionDown = false;
+let recoveryTimer = null;
 
 function isNetworkError(error) {
   return /Failed to fetch|NetworkError|network error|Load failed|ERR_INTERNET|ERR_NETWORK|ERR_NAME_NOT_RESOLVED/i
@@ -161,12 +162,22 @@ function applyAutoRefresh() {
   Promise.resolve(isOffline() ? sb.auth.stopAutoRefresh() : sb.auth.startAutoRefresh()).catch(() => {});
 }
 
+function scheduleRecovery() {
+  if (recoveryTimer || !connectionDown || typeof probeConnection !== "function") return;
+  recoveryTimer = setTimeout(async () => {
+    recoveryTimer = null;
+    if (connectionDown && !(await probeConnection())) scheduleRecovery();
+  }, SUP_CONFIG.offlineRetryMs);
+}
+
 function noteConnection(reachable) {
   const antes = isOffline();
   connectionDown = !reachable;
+  if (connectionDown) scheduleRecovery();
   if (antes === isOffline()) return;
   if (typeof refreshConnectionBar === "function") refreshConnectionBar();
   applyAutoRefresh();
+  if (antes && typeof onConnectionBack === "function") onConnectionBack();
 }
 
 function toast(text, tone = "ok") {

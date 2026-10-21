@@ -3,7 +3,7 @@ defineActions('click',{
   firstOwner:el=>runAction(el,firstOwner,'Criando…'),
   submitNewPassword:el=>runAction(el,submitNewPassword,'Salvando…'),
   logout:()=>logout(),
-  refreshScreen:el=>runAction(el,refreshCurrentScreen,''),
+  refreshScreen:el=>runAction(el,refreshCurrentScreen,'',{offline:true}),
   refreshAll:el=>runAction(el,refreshAllData,'Atualizando…'),
   userMenu:()=>openNavMore(),
   navMore:()=>openNavMore(),
@@ -81,8 +81,10 @@ document.querySelectorAll('.searchIcon').forEach(node=>{node.innerHTML=icon('sea
 document.addEventListener('input',e=>{if(e.target.classList&&e.target.classList.contains('decimal'))e.target.value=sanitizeDecimal(e.target.value)},true);
 
 function refreshConnectionBar(){$('offlineBar').classList.toggle('hidden',!isOffline())}
-window.addEventListener('online',()=>{forgetConnectionProbe();noteConnection(true);applyAutoRefresh();refreshConnectionBar();showTab(currentTabId());toast('Conexão restabelecida.');syncOutbox()});
+function onConnectionBack(){showTab(currentTabId());toast('Conexão restabelecida.');syncOutbox()}
+window.addEventListener('online',()=>{noteConnection(false);probeConnection()});
 window.addEventListener('offline',()=>{noteConnection(false);applyAutoRefresh();refreshConnectionBar()});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&isOffline())probeConnection()});
 refreshConnectionBar();
 applyAutoRefresh();
 renderOutboxBar();

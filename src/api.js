@@ -5,8 +5,7 @@ function podeIrARede() {
   return Date.now() - ultimaIdaARede >= SUP_CONFIG.offlineRetryMs;
 }
 
-async function supFetch(input, init = {}, timeoutMs = SUP_CONFIG.requestTimeoutMs) {
-  if (!podeIrARede()) throw new TypeError("Failed to fetch — sem conexão com o servidor.");
+async function fetchComPrazo(input, init = {}, timeoutMs = SUP_CONFIG.requestTimeoutMs) {
   ultimaIdaARede = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -29,14 +28,19 @@ async function supFetch(input, init = {}, timeoutMs = SUP_CONFIG.requestTimeoutM
   }
 }
 
+async function supFetch(input, init = {}, timeoutMs = SUP_CONFIG.requestTimeoutMs) {
+  if (!podeIrARede()) throw new TypeError("Failed to fetch — sem conexão com o servidor.");
+  return fetchComPrazo(input, init, timeoutMs);
+}
+
 let conexaoConferida = null;
 
 function probeConnection() {
   if (conexaoConferida) return conexaoConferida;
   conexaoConferida = (async () => {
-    if (isOffline()) return false;
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
     try {
-      const response = await supFetch(`${SUP_CONFIG.supabaseUrl}/auth/v1/health`, {
+      const response = await fetchComPrazo(`${SUP_CONFIG.supabaseUrl}/auth/v1/health`, {
         method: "GET",
         headers: { apikey: SUP_CONFIG.supabasePublishableKey }
       }, SUP_CONFIG.probeTimeoutMs);
@@ -44,12 +48,8 @@ function probeConnection() {
     } catch {
       return false;
     }
-  })();
+  })().finally(() => { conexaoConferida = null; });
   return conexaoConferida;
-}
-
-function forgetConnectionProbe() {
-  conexaoConferida = null;
 }
 
 const sb = supabase.createClient(SUP_CONFIG.supabaseUrl, SUP_CONFIG.supabasePublishableKey, {

@@ -102,9 +102,12 @@ test("tela que depende do servidor avisa em vez de tentar buscar", () => {
 
 test("quando a conexão volta, a tela bloqueada se recarrega sozinha", () => {
   const bootstrap = read("src/bootstrap.js");
-  const aoVoltar = bootstrap.slice(bootstrap.indexOf("addEventListener('online'"));
+  const aoVoltar = bootstrap.slice(bootstrap.indexOf("function onConnectionBack"));
   assert.match(aoVoltar.slice(0, 200), /showTab\(currentTabId\(\)\)/,
     "sem isso o usuário fica olhando o aviso mesmo com internet de volta");
+  const online = bootstrap.slice(bootstrap.indexOf("addEventListener('online'"));
+  assert.match(online.slice(0, 200), /probeConnection\(\)/,
+    "o evento online só confirma a volta depois de falar com o servidor");
 });
 
 test("a fila de tratos não tenta subir enquanto está sem conexão", () => {
@@ -124,13 +127,12 @@ test("sem conexão, o supabase para de tentar renovar a sessão sozinho", () => 
   assert.match(ui, /sb\.auth\.startAutoRefresh\(\)/, "sem religar, a sessão não volta a se renovar");
 
   const mudanca = ui.slice(ui.indexOf("function noteConnection"));
-  assert.match(mudanca.slice(0, 260), /applyAutoRefresh\(\)/, "a troca de estado precisa mexer no ticker");
+  assert.match(mudanca.slice(0, mudanca.indexOf("\nfunction ", 1)), /applyAutoRefresh\(\)/, "a troca de estado precisa mexer no ticker");
 
   const bootstrap = read("src/bootstrap.js");
-  for (const evento of ["online", "offline"]) {
-    const trecho = bootstrap.slice(bootstrap.indexOf(`addEventListener('${evento}'`), bootstrap.indexOf(`addEventListener('${evento}'`) + 220);
-    assert.match(trecho, /applyAutoRefresh\(\)/, `o evento ${evento} não ajusta o ticker`);
-  }
+  const trecho = evento => bootstrap.slice(bootstrap.indexOf(`addEventListener('${evento}'`), bootstrap.indexOf(`addEventListener('${evento}'`) + 220);
+  assert.match(trecho("offline"), /applyAutoRefresh\(\)/, "o evento offline não ajusta o ticker");
+  assert.match(trecho("online"), /noteConnection\(/, "o evento online precisa passar pela troca de estado, que religa o ticker");
 });
 
 test("toda chamada ao supabase tem prazo para desistir", () => {

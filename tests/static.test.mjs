@@ -385,8 +385,8 @@ test("a fila aparece na tela e dá para reenviar ou descartar", () => {
   assert.match(outbox, /async function discardQueuedFeeding/);
   assert.match(feeding, /AGUARDANDO INTERNET/);
   assert.match(feeding, /data-feed-drop=/);
-  const online = read("src/bootstrap.js").split("\n").find(linha => linha.includes("addEventListener('online'")) || "";
-  assert.ok(online.includes("syncOutbox()"), "voltou a internet, a fila sobe sozinha");
+  const aoVoltar = read("src/bootstrap.js").split("\n").find(linha => linha.includes("function onConnectionBack")) || "";
+  assert.ok(aoVoltar.includes("syncOutbox()"), "voltou a internet, a fila sobe sozinha");
   assert.match(read("assets/css/app.css"), /\.outboxBar\{/);
 });
 

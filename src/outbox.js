@@ -59,7 +59,7 @@ async function syncOutbox(manual = false) {
   }
 
   if (isOffline()) {
-    if (manual) toast("Ainda sem conexão. Os tratos continuam guardados no aparelho.", "err");
+    if (manual && !(await probeConnection())) toast("Ainda sem conexão. Os tratos continuam guardados no aparelho.", "err");
     return;
   }
 

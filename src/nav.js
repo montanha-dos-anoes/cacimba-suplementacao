@@ -67,6 +67,10 @@ function currentTabId() {
 }
 
 async function refreshCurrentScreen() {
+  if (isOffline()) {
+    if (!(await probeConnection())) toast("Ainda sem conexão. Mostrando os dados guardados no aparelho.", "err");
+    return;
+  }
   const tab = currentTabId();
   if (tab === "inicio") await loadHome({ force: true });
   else if (tab === "trato") await loadFeedingScreen({ force: true });

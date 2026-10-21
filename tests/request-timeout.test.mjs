@@ -121,3 +121,53 @@ test("com conexão, nada é engasgado", async () => {
   }
   assert.equal(idas.length, 3);
 });
+
+function apiProbe({ navegadorOnline = true, respostas = [] } = {}) {
+  const idas = [];
+  const conexao = [];
+  const context = vm.createContext({
+    Promise, Date, console, Error, TypeError, AbortController, setTimeout, clearTimeout,
+    navigator: { onLine: navegadorOnline },
+    SUP_CONFIG: { supabaseUrl: "https://ref.supabase.co", supabasePublishableKey: "k",
+      requestTimeoutMs: 50, offlineRetryMs: 20000, probeTimeoutMs: 50 },
+    noteConnection: reachable => conexao.push(reachable),
+    isNetworkError: () => true,
+    isOffline: () => true,
+    supabase: { createClient: () => ({ auth: {}, rpc: async () => ({}) }) },
+    fetch: async input => {
+      idas.push(String(input));
+      if (respostas.shift() === false) throw new TypeError("Failed to fetch");
+      return { ok: true, status: 200 };
+    }
+  });
+  vm.runInContext(read("src/api.js"), context);
+  return { run: expression => vm.runInContext(expression, context), idas, conexao };
+}
+
+test("marcado sem conexão, a sondagem ainda vai à rede e confirma a volta", async () => {
+  const { run, idas, conexao } = apiProbe();
+  assert.equal(await run("probeConnection()"), true,
+    "sem isso o app fica preso no aviso Sem conexão até recarregar a página");
+  assert.equal(idas.length, 1);
+  assert.deepEqual(conexao, [true]);
+});
+
+test("a sondagem não guarda o resultado da tentativa anterior", async () => {
+  const { run, idas } = apiProbe({ respostas: [false, true] });
+  assert.equal(await run("probeConnection()"), false);
+  assert.equal(await run("probeConnection()"), true, "a segunda tentativa precisa sair do aparelho");
+  assert.equal(idas.length, 2);
+});
+
+test("com navigator.onLine false a sondagem nem sai do aparelho", async () => {
+  const { run, idas } = apiProbe({ navegadorOnline: false });
+  assert.equal(await run("probeConnection()"), false);
+  assert.equal(idas.length, 0);
+});
+
+test("a sondagem passa mesmo dentro da trava de 20s do supFetch", async () => {
+  const { run, idas } = apiProbe({ respostas: [false, true] });
+  await run('supFetch("https://ref.supabase.co/x").catch(() => null)');
+  assert.equal(await run("probeConnection()"), true, "a trava existe para o refresh de sessão, não para a sondagem");
+  assert.equal(idas.length, 2);
+});
